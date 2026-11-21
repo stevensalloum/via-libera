@@ -21,6 +21,7 @@ dependencies = [
 tabpfn-check = "tabpfn_spatial.tabpfn_check:main"
 spatial-example = "tabpfn_spatial.core.example:main"
 leak-demo = "tabpfn_spatial.pipeline:main"
+sim-viz = "tabpfn_spatial.sim.viz:main"
 
 [project.optional-dependencies]
 local = [
