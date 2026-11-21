@@ -4,10 +4,15 @@ Only Steven's agent edits this file. Update it before every PR.
 
 ## Doing
 
-- Next: detector-triggered alarm, then step 5 (TabPFN latency: cache / fast model / local).
+- Waiting for Rayan's and Ahmad's pushes; then run `sync-check` on both TabPFN classes and
+  merge. Next build: crowd model and risk-aware capacity-constrained planner
+  (`docs/research/evacuation.md`), timing study on large plants.
 
 ## Done
 
+- Detector alarm (first 5 s sample above 10 % LEL: median 10 s, max 25 s) and
+  `uv run sync-check` (closed loop, every hand-over checked, latency per call). Conventions
+  and heads-up list in `docs/sync.md`.
 - Timing study (`uv run evac-timing`, 100 leaks): decide early (exposed 6 % at 10 s,
   14 % at 20 s, 22 % at 60 s); replanning rate 2-60 s makes no difference; routes must land
   within about 2 s (2 s keeps ~60 % of the gain, 10 s ~0); people should walk to the
@@ -33,7 +38,8 @@ Only Steven's agent edits this file. Update it before every PR.
 
 ## Needs
 
-- Nothing yet.
+- Rayan, Ahmad: run `uv run sync-check --source/--hazard <your class>` before pushing; see
+  `docs/sync.md` section 4 (decision at ~10-30 s, absolute forecast times, pipes).
 
 ## Blocked
 

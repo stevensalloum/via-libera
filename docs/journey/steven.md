@@ -173,3 +173,53 @@ blur is now half a cell, with a test over every leak site. In the first figure, 
 the planner controls was hidden under the pre-alarm area, so it now has its own panel.
 Caveats: the alarm here sounds at a fixed time. A real detector fires when gas reaches it,
 which is the next thing to model.
+
+## 2026-11-21 · Detector alarm and the sync check
+
+**What changed and why.** The team agreed that the whole plant evacuates as soon as a
+leak is detected. The default is the nearest exit, and a route replaces it when the models
+say that exit is unsafe.
+
+- **Detector alarm:** the alarm is now the first sensor sample (every 5 s, as Rayan said
+  our sensors read) above `sim.ALARM_LEVEL` = 10 % of LEL. `run_live(t_alarm=None)` and
+  `evac-live` use it by default. A fixed `t_alarm` still works for the timing study.
+- **`uv run sync-check`:** runs the closed loop with any locator and predictor and checks
+  every hand-over: shapes, the (iy, ix) grid, absolute times, probabilities, solid cells,
+  ignition zones and routes. It also times each call. The teammates run it on their model
+  before pushing.
+- **`docs/sync.md`:** writes down the shared conventions, plus a heads-up list from
+  reading their branches.
+
+![sync timeline](../figures/steven/04-sync-timeline.png)
+
+Figure: `uv run sync-check --timeline docs/figures/steven/04-sync-timeline.png`.
+
+**Numbers:**
+- **Alarm time** (default plant, 200 leaks, 14 sensors):
+  - median 10 s, 90 % within 15 s, max 25 s with sensors read every 5 s;
+  - median 6 s with every 1 s;
+  - median 10 s with every 10 s.
+- **Readings at the alarm:** 2 to 6 per sensor (median 3).
+- **Walk to the nearest exit, no crowd:**
+  - default plant: median 12 s, max 24 s;
+  - random 200 x 100 m plant: median 39 s, 95th percentile 69 s, max 81 s.
+- **Baselines through the sync check:** 0 problems at decision times 10/20/30/60 s on
+  the default and a random plant. Warnings: the centroid map puts only 14-25 % of its
+  mass on the pipes, and it gives no release rate.
+
+What we learned:
+
+1. **The models must answer at about 10 s, from about 3 readings.** Rayan's locator reads
+   20/40/60 s and Ahmad's hazard is trained on 70-180 s: both are tuned for a moment when,
+   on our plant, everyone is already outside.
+2. **"Seconds since the leak started" is a simulation luxury.** A real plant only knows
+   when the alarm went off, so features should be relative to the alarm.
+3. **Large plants change the picture.** Walks of minutes make long forecasts and
+   replanning matter, and crowds at the doors make the "fastest path" the wrong goal.
+   `docs/research/evacuation.md` proposes capacity-constrained routing (CCRP with a risk
+   cost) plus a cell-queue crowd model to score it.
+
+**What did not work.** I test-merged the teammates' current branches locally. Rayan's
+tests pick leak sites by fixed index and fail with 24 pipe sites; they all pass on
+`Factory.default(pipes=False)`. This is a heads-up for their next push, not a merge
+blocker: their branches are still in progress.
