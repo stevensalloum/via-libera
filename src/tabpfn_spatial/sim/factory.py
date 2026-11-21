@@ -102,16 +102,7 @@ class Factory:
             Machine("generator", 40, 28, 46, 34, hot=True),
             Machine("dryer", 50, 18, 56, 24, hot=True),
         )
-        ny, nx = int(height / cell), int(width / cell)
-        c_x = (np.arange(nx) + 0.5) * cell
-        c_y = (np.arange(ny) + 0.5) * cell
-        gx, gy = np.meshgrid(c_x, c_y)
-        walls = np.zeros((ny, nx), dtype=bool)
-        for m in machines:
-            walls |= (gx >= m.x0) & (gx <= m.x1) & (gy >= m.y0) & (gy <= m.y1)
-        partition = (gx > 30) & (gx < 32)
-        doors = ((gy > 6) & (gy < 12)) | ((gy > 26) & (gy < 32))
-        walls |= partition & ~doors
+        walls = _rasterise(width, height, cell, machines, 30.0, ((6, 12), (26, 32)))
         exits = np.array([[1.0, 21.0], [59.0, 13.0], [21.0, 39.0], [45.0, 1.0]])
         sensors = np.array(
             [
@@ -133,3 +124,138 @@ class Factory:
             dtype=float,
         )
         return cls(width, height, cell, walls, machines, exits, sensors)
+
+    @classmethod
+    def random(
+        cls,
+        rng: np.random.Generator,
+        width: float = 60.0,
+        height: float = 40.0,
+        cell: float = 2.0,
+        n_machines: int = 6,
+        n_hot: int = 3,
+    ) -> "Factory":
+        """Random plant: machines, a dividing wall with two doors, 4 exits, 16 sensors.
+
+        Retries until every open cell can reach an exit. Reproducible for a given ``rng``.
+        """
+        for _ in range(200):
+            machines = _random_machines(rng, width, height, n_machines, n_hot)
+            if machines is None:
+                continue
+            wall_x = float(rng.uniform(0.35, 0.65) * width)
+            doors = tuple(
+                (float(y), float(y) + 6.0)
+                for y in (rng.uniform(2, height / 2 - 8), rng.uniform(height / 2, height - 8))
+            )
+            walls = _rasterise(width, height, cell, machines, wall_x, doors)
+            exits = _random_exits(rng, walls, cell, width, height)
+            if exits is None or not _all_reach(walls, [_cell(e, cell, walls) for e in exits]):
+                continue
+            sensors = _snap_sensors(rng, walls, cell, width, height)
+            return cls(width, height, cell, walls, machines, exits, sensors)
+        raise RuntimeError("could not build a connected random factory")
+
+
+def _rasterise(width, height, cell, machines, wall_x, doors) -> np.ndarray:
+    """Solid mask (ny, nx) from machine rectangles and a vertical wall with door gaps."""
+    ny, nx = int(height / cell), int(width / cell)
+    gx, gy = np.meshgrid((np.arange(nx) + 0.5) * cell, (np.arange(ny) + 0.5) * cell)
+    walls = np.zeros((ny, nx), dtype=bool)
+    for m in machines:
+        walls |= (gx >= m.x0) & (gx <= m.x1) & (gy >= m.y0) & (gy <= m.y1)
+    gap = np.zeros_like(walls)
+    for y0, y1 in doors:
+        gap |= (gy > y0) & (gy < y1)
+    walls |= (gx > wall_x) & (gx < wall_x + cell) & ~gap
+    return walls
+
+
+_NAMES = (
+    "compressor",
+    "furnace",
+    "tank farm",
+    "press line",
+    "generator",
+    "dryer",
+    "boiler",
+    "mixer",
+    "kiln",
+    "chiller",
+)
+
+
+def _random_machines(rng, width, height, n, n_hot) -> tuple[Machine, ...] | None:
+    """Non-overlapping rectangles 4-14 m, 4 m apart and 4 m from the walls (or None)."""
+    boxes: list[Machine] = []
+    hot = set(rng.choice(n, size=min(n_hot, n), replace=False).tolist())
+    for i in range(n):
+        for _ in range(100):
+            w, h = rng.uniform(4, 14), rng.uniform(4, 10)
+            x0, y0 = rng.uniform(4, width - 4 - w), rng.uniform(4, height - 4 - h)
+            box = Machine(_NAMES[i % len(_NAMES)], x0, y0, x0 + w, y0 + h, hot=i in hot)
+            if all(
+                box.x1 + 4 < b.x0 or b.x1 + 4 < box.x0 or box.y1 + 4 < b.y0 or b.y1 + 4 < box.y0
+                for b in boxes
+            ):
+                boxes.append(box)
+                break
+        else:
+            return None
+    return tuple(boxes)
+
+
+def _cell(xy: np.ndarray, cell: float, walls: np.ndarray) -> tuple[int, int]:
+    ny, nx = walls.shape
+    return int(np.clip(xy[1] // cell, 0, ny - 1)), int(np.clip(xy[0] // cell, 0, nx - 1))
+
+
+def _random_exits(rng, walls, cell, width, height) -> np.ndarray | None:
+    """One exit on each side of the hall, on an open boundary cell (or None)."""
+    ny, nx = walls.shape
+    sides = [
+        (lambda i: (i, 0), ny),
+        (lambda i: (i, nx - 1), ny),
+        (lambda i: (0, i), nx),
+        (lambda i: (ny - 1, i), nx),
+    ]
+    exits = []
+    for at, n in sides:
+        free = [at(i) for i in range(2, n - 2) if not walls[at(i)]]
+        if not free:
+            return None
+        iy, ix = free[rng.integers(len(free))]
+        exits.append([(ix + 0.5) * cell, (iy + 0.5) * cell])
+    return np.array(exits)
+
+
+def _all_reach(walls: np.ndarray, starts: list[tuple[int, int]]) -> bool:
+    """True if every open cell is 4-connected to one of ``starts``. O(ny * nx)."""
+    seen = np.zeros_like(walls)
+    stack = list(starts)
+    for c in stack:
+        seen[c] = True
+    while stack:
+        y, x = stack.pop()
+        for n in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
+            if (
+                0 <= n[0] < walls.shape[0]
+                and 0 <= n[1] < walls.shape[1]
+                and not walls[n]
+                and not seen[n]
+            ):
+                seen[n] = True
+                stack.append(n)
+    return bool(np.array_equal(seen, ~walls))
+
+
+def _snap_sensors(rng, walls, cell, width, height, rows=4, cols=4) -> np.ndarray:
+    """A jittered rows x cols grid of sensors, each moved to the nearest open cell."""
+    open_yx = np.argwhere(~walls)
+    out = []
+    for gy in (np.arange(rows) + 0.5) / rows * height:
+        for gx in (np.arange(cols) + 0.5) / cols * width:
+            target = np.array([gx, gy]) + rng.uniform(-3, 3, size=2)
+            centres = (open_yx[:, ::-1] + 0.5) * cell
+            out.append(centres[np.argmin(((centres - target) ** 2).sum(axis=1))])
+    return np.array(out)
