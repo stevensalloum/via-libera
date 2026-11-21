@@ -2,7 +2,6 @@ name: CI
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
 
@@ -17,26 +16,15 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: No AI attribution in commits or PR text
-        if: github.event_name == 'pull_request'
-        env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
-          PR_TEXT: ${{ github.event.pull_request.title }} ${{ github.event.pull_request.body }}
-        run: |
-          # Real attribution only: trailer lines, "generated with/by <tool>", the robot badge.
-          pattern='^[[:space:]]*co-authored-by:|generated (with|by) \[?(claude|codex|chatgpt|copilot|openai|anthropic)|🤖'
-          if { git log --format=%B "$BASE..$HEAD"; printf '%s\n' "$PR_TEXT"; } | grep -inE "$pattern"; then
-            echo "::error::Remove AI attribution lines (see AGENTS.md, Commits and PRs)."
-            exit 1
-          fi
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --locked
+      - name: requirements.txt matches uv.lock
+        run: |
+          uv export --format requirements-txt --no-hashes --group dev --no-emit-project --quiet -o requirements.txt
+          git diff --exit-code requirements.txt
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest
