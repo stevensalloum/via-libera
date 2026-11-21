@@ -299,8 +299,8 @@ What we learned:
    (50 people) to 95 % (big plants) against the nearest exit.
 2. **Capacity awareness is what makes big plants fast.** With good maps it is as safe as
    risk-only routing and gets 95 % out 38 % sooner on D (93 vs 151 s) and 32 % sooner on
-   E (181 vs 267 s), with half the queueing or less. Risk-only routing piles everyone onto
-   the safe exits and is the slowest plan of all.
+   E (181 vs 267 s), with about half the queueing or less. Risk-only routing piles everyone
+   onto the safe exits: no faster than the nearest exit on big plants, slowest on our hall.
 3. **With today's baseline maps, there is no free lunch.** Capacity-aware routing sends
    some people on longer walks, and longer walks cross gas that a wrong map missed. On the
    biggest plant it exposed more people than the nearest exit (4.5 % vs 2.9 %), though with
