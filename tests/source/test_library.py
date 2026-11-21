@@ -42,7 +42,9 @@ def test_make_library_shapes_and_determinism() -> None:
 
 def test_noise_free_library_row_equals_features_of_sim_readings() -> None:
     f = Factory.default()
-    sc = Scenario(f.leak_sites[7], 1.3, np.array([0.6, -0.4]))
+    sc = Scenario(
+        f.leak_sites[np.random.default_rng(7).choice(len(f.leak_sites))], 1.3, np.array([0.6, -0.4])
+    )
     rng = np.random.default_rng(0)
     quiet = {"noise": 0.0, "floor": 0.0, "wind_noise": 0.0}
     X, _ = library_from_scenarios(f, [sc], rng, leak_zones(f), **quiet)
@@ -52,7 +54,9 @@ def test_noise_free_library_row_equals_features_of_sim_readings() -> None:
 
 def test_noisy_series_matches_readings_layout() -> None:
     f = Factory.default()
-    sc = Scenario(f.leak_sites[0], 1.0, np.array([1.0, 0.0]))
+    sc = Scenario(
+        f.leak_sites[np.random.default_rng(0).choice(len(f.leak_sites))], 1.0, np.array([1.0, 0.0])
+    )
     times, values, wind = noisy_series(f, [sc, sc], np.random.default_rng(1))
     r = readings(f, sc, 60.0, np.random.default_rng(1))
     np.testing.assert_array_equal(times, r.times)
