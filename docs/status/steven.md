@@ -4,11 +4,15 @@ Only Steven's agent edits this file. Update it before every PR.
 
 ## Doing
 
-- Evacuation step 2: compare planners (A*, time-dependent, many people), then the timing
-  study (harm vs alarm time and update rate).
+- Next: detector-triggered alarm, then step 5 (TabPFN latency: cache / fast model / local).
 
 ## Done
 
+- Timing study (`uv run evac-timing`, 100 leaks): decide early (exposed 6 % at 10 s,
+  14 % at 20 s, 22 % at 60 s); replanning rate 2-60 s makes no difference; routes must land
+  within about 2 s (2 s keeps ~60 % of the gain, 10 s ~0); people should walk to the
+  nearest exit until the route lands, never wait. **Rayan: the locator needs a 20-30 s
+  version** (today it reads 20/40/60 s).
 - Live one-person evacuation (`evac.live`, `uv run evac-live`): replans every `update_s`
   seconds; live vs plan-once vs nearest exit on the true gas. 60 leaks, default settings:
   exposed 9 / 9 / 11, harm-seconds 133 / 131 / 137, of which 98 before the alarm at 30 s.
