@@ -28,7 +28,7 @@ from pathlib import Path
 import numpy as np
 
 from tabpfn_spatial.evac.crowd import CrowdParams, sample_workers
-from tabpfn_spatial.evac.crowd_plan import PLANNERS
+from tabpfn_spatial.evac.crowd_plan import DETOUR_WEIGHT, PLANNERS
 from tabpfn_spatial.evac.crowd_run import prepare, run_crowd
 from tabpfn_spatial.sim import Factory, sample_scenarios
 
@@ -75,9 +75,9 @@ RUNGS = (
 )  # fmt: skip
 
 
-def _job(args: tuple[Rung, int, str]) -> list[dict]:
+def _job(args: tuple[Rung, int, str, float]) -> list[dict]:
     """All planners on one (rung, leak seed, models): same leak, alarm, maps and people."""
-    rung, seed, models = args
+    rung, seed, models, detour = args
     f = rung.plant()
     rng = np.random.default_rng(seed)
     sc = sample_scenarios(f, 1, rng)[0]
@@ -86,7 +86,7 @@ def _job(args: tuple[Rung, int, str]) -> list[dict]:
     params = CrowdParams(door_m=rung.door_m)
     return [
         {"rung": rung.name, "seed": seed, "models": models, "planner": p,
-         **run_crowd(f, prep, people, p, params).metrics}
+         **run_crowd(f, prep, people, p, params, detour_weight=detour).metrics}
         for p in PLANNERS
     ]  # fmt: skip
 
@@ -96,9 +96,10 @@ def run_ladder(
     seeds: Iterable[int],
     models: Sequence[str] = ("perfect", "baseline"),
     workers: int = 1,
+    detour_weight: float = DETOUR_WEIGHT,
 ) -> list[dict]:
     """One row per rung x models x leak seed x planner, in that order."""
-    jobs = [(r, s, m) for r in rungs for m in models for s in seeds]
+    jobs = [(r, s, m, detour_weight) for r in rungs for m in models for s in seeds]
     if workers > 1:
         with ProcessPoolExecutor(workers) as pool:
             parts = list(pool.map(_job, jobs))
@@ -218,6 +219,8 @@ def main() -> int:
     """CLI: ``uv run evac-crowd [--leaks 20] [--workers 10] [--rungs A B ...]``."""
     p = argparse.ArgumentParser(description="Crowd planners on a ladder of scenarios.")
     p.add_argument("--leaks", type=int, default=20)
+    p.add_argument("--first-seed", type=int, default=500, help="held-out leak seeds")
+    p.add_argument("--detour", type=float, default=DETOUR_WEIGHT, help="ccrp detour weight")
     p.add_argument("--workers", type=int, default=8)
     p.add_argument("--rungs", nargs="+", default=[r.name for r in RUNGS])
     p.add_argument("--models", nargs="+", default=["perfect", "baseline"])
@@ -229,9 +232,11 @@ def main() -> int:
     if a.plot_only:
         rows = json.loads(data.read_text())["rows"]
     else:
-        rows = run_ladder(rungs, range(a.leaks), a.models, a.workers)
+        seeds = range(a.first_seed, a.first_seed + a.leaks)
+        rows = run_ladder(rungs, seeds, a.models, a.workers, a.detour)
         a.out.mkdir(parents=True, exist_ok=True)
-        meta = {"rungs": [asdict(r) for r in rungs], "leaks": a.leaks, "models": a.models}
+        meta = {"rungs": [asdict(r) for r in rungs], "seeds": [seeds.start, seeds.stop],
+                "models": a.models, "detour_weight": a.detour}  # fmt: skip
         data.write_text(json.dumps({"meta": meta, "rows": rows}, indent=1))
     print_table(rows)
     print(plot_ladder(rows, a.out / "ladder.png"))

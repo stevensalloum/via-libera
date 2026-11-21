@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from tabpfn_spatial.evac.crowd import DEFAULT_PARAMS, Crowd, CrowdParams
-from tabpfn_spatial.evac.crowd_plan import PLANNERS, assign
+from tabpfn_spatial.evac.crowd_plan import DETOUR_WEIGHT, PLANNERS, assign
 from tabpfn_spatial.evac.fields import danger_window
 from tabpfn_spatial.evac.standins import OracleHazard, OracleLocator
 from tabpfn_spatial.hazard import ForwardSimPredictor, hazard_from_fields
@@ -93,6 +93,7 @@ def run_crowd(
     planner: str,
     params: CrowdParams = DEFAULT_PARAMS,
     record_every: int | None = None,
+    detour_weight: float = DETOUR_WEIGHT,
 ) -> CrowdResult:
     """Evacuate ``positions`` with ``planner``; every planner replans at the same times."""
     if planner not in PLANNERS:
@@ -102,7 +103,8 @@ def run_crowd(
     out = CrowdResult({})
     for k, t in enumerate(prep.times):
         if round(float(t)) in replans and crowd.active.any():
-            assign(planner, f, crowd, replans[round(float(t))], float(t))
+            assign(planner, f, crowd, replans[round(float(t))], float(t),
+                   detour_weight=detour_weight)  # fmt: skip
         crowd.expose(prep.fields[k], prep.harm[k])
         if record_every and k % record_every == 0:
             out.frames.append(_snapshot(float(t), k, crowd))
