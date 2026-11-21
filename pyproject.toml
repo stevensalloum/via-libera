@@ -22,6 +22,7 @@ tabpfn-check = "tabpfn_spatial.tabpfn_check:main"
 spatial-example = "tabpfn_spatial.core.example:main"
 leak-demo = "tabpfn_spatial.pipeline:main"
 sim-viz = "tabpfn_spatial.sim.viz:main"
+evac-live = "tabpfn_spatial.evac.viewer:main"
 
 [project.optional-dependencies]
 local = [
