@@ -2,6 +2,13 @@
 
 Newest first. Each entry: date, decision, why, alternatives considered.
 
+## 2026-11-21: Keep AI co-author trailers
+
+- **Decision:** commits keep the agent's `Co-Authored-By:` trailer; Claude Code's default
+  attribution stays on. Reverses the earlier no-attribution rule and its CI check.
+- **Why:** the team prefers transparent credit for agent-written code over hiding it.
+- **Alternatives:** no attribution with a CI guard (dropped).
+
 ## 2026-11-21: AGENTS.md as the single rulebook
 
 - **Decision:** team rules live in `AGENTS.md`; `CLAUDE.md` only imports it (`@AGENTS.md`).

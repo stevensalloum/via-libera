@@ -48,5 +48,5 @@ htmlcov/
 .idea/
 .vscode/
 
-# Claude Code local overrides (shared settings.json stays committed)
+# Claude Code local overrides
 .claude/settings.local.json
