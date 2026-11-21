@@ -4,14 +4,32 @@ Only Ahmad's agent edits this file. Update it before every PR.
 
 ## Doing
 
-- Sensor-history ablation (#31): optional features and exploratory pilots are in
-  draft PR #32; results do not justify changing the seven-feature default.
+- Multi-layout verification: 117 paired case variations from 28 base leaks in
+  two layouts completed before the requested time limit; groups are incomplete
+  and uneven. Full settings, route baselines and limitations are in
+  `hazard/MULTIPLANT_RESULTS.md`.
+- Sensor-history ablation (#31): optional features and exploratory pilots were merged in
+  PR #32; results do not justify changing the seven-feature default.
 - Review the merged hazard predictor (#19), source selection and geometry with
   Ahmad. Steven's pipe workflow and Rayan's source locator are now on main; the
   existing comparisons are preliminary simulation results.
 
 ## Done
 
+- Partial multi-layout cloud study, evaluation seeds 20261121/20261122/20261123,
+  hazard context seed 1001, 8,000 rows, Rayan source seed 12345, top 3, open
+  cells, five forecast times. Forward / centroid-context / Rayan-context toxic
+  Brier: standard 0.02719 / 0.05825 / 0.03628 (28 cases); changing wind 0.04107 /
+  0.05988 / 0.04080 (25); sensor faults 0.04664 / 0.06014 / 0.04151 (25);
+  slower mixing 0.03320 / 0.05359 / 0.03755 (19); faster mixing 0.03200 /
+  0.04492 / 0.02745 (10); combined stress 0.04917 / 0.05001 / 0.03677 (10).
+  Pooled recall at 0.5 in the same order: 0.8990 / 0.5642 / 0.7196; 0.8492 /
+  0.5663 / 0.7095; 0.8117 / 0.5230 / 0.6706; 0.8718 / 0.5785 / 0.6792;
+  0.8810 / 0.7630 / 0.8779; 0.7739 / 0.6717 / 0.7440. At least 1,070,000
+  credits were quoted for completed cloud calls including pilot and batch checks;
+  additional interrupted calls and actual provider billing are unknown. Forward
+  and offline tests use zero. Unequal conditions and repeated scenarios mean no
+  general ranking; source and target both use the same simulator.
 - Cloud sensor-history pilots, five simulated pipe leaks, evaluation seed 0,
   8,000 context rows seed 1001, forecasts 0/10/20/30 s after observation, top 3:
   centroid source forward / A spatial / B time / C sensors Brier 0.05806 /

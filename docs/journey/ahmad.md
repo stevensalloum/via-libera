@@ -54,3 +54,32 @@ Each pilot used one factory and the same simulator to make context and targets;
 Rayan used a pipe prior in the first case. Route replay omitted latency. Full
 settings, uncertainty and baselines are in
 [`SENSOR_HISTORY.md`](../../src/tabpfn_spatial/hazard/SENSOR_HISTORY.md).
+
+## 2026-11-22: Partial paired multi-layout validation
+
+Compared the existing forward simulation, cloud TabPFN with centroid-sourced
+context, and the same TabPFN with Rayan-sourced context, on the same source
+outputs and ground truth. The requested time window ended before the four-layout
+plan completed: 117 scenario variations from 28 base leaks in two layouts, with
+unequal condition sizes. Standard-condition Brier was 0.02719 / 0.05825 /
+0.03628 (28 cases); under changing wind it was 0.04107 / 0.05988 / 0.04080
+(25). Other stress conditions and the recall, false-positive and route baselines
+are in [`MULTIPLANT_RESULTS.md`](../../src/tabpfn_spatial/hazard/MULTIPLANT_RESULTS.md).
+The Rayan-context model improved Brier relative to the centroid-context model in
+all six partial groups; the forward baseline had higher threshold recall. These
+results use simulated data only and do not establish a general winner.
+
+![Partial multi-layout validation](../figures/ahmad/03-multiplant-validation.png)
+
+Reproduce the figure without model calls from the local checkpoint files:
+
+```bash
+uv run python tests/hazard/summarise_multiplant.py \
+  outputs/multiplant-results.jsonl outputs/multiplant-replication.jsonl \
+  outputs/multiplant-replication2.jsonl \
+  --figure docs/figures/ahmad/03-multiplant-validation.png
+```
+
+At least 1,070,000 credits were quoted for completed cloud calls, including the
+small pilot and batching checks; interrupted calls and actual provider billing
+are unknown. Forward and unit-test baselines used zero cloud credits.
