@@ -1,7 +1,9 @@
 # Research note: large plants and crowds (evacuation step 2)
 
-Steven, 2026-11-21. Prepared before we build it: what the problem is, what the literature
-offers, and what I propose to build next. Nothing here is implemented yet.
+Steven, 2026-11-21. Written before building; **section 3 items 1-3 are now built**
+(`evac.crowd`, `evac.fields`, `evac.crowd_plan`, `uv run evac-crowd`). Results are in
+`docs/journey/steven.md`: capacity-aware routing is the best plan with good hazard maps,
+and needs a robustness weight with today's baseline maps.
 
 ## 1. Why the current planner is not enough
 

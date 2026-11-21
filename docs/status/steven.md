@@ -10,6 +10,11 @@ Only Steven's agent edits this file. Update it before every PR.
 
 ## Done
 
+- Crowds (`uv run evac-crowd`, `evac-crowd-live`): crowd simulator, exit fields, three crowd
+  planners, scenario ladder A-E up to 200x120 m and 1,200 people, 50 held-out leaks each.
+  With perfect maps the capacity-aware planner is as safe as risk-only (45-95 % less harm
+  than nearest) and 32-38 % faster on big plants; with baseline maps the planners trade
+  safety for speed, so hazard-map quality decides. About 1 leak in 50 is never detected.
 - Detector alarm (first 5 s sample above 10 % LEL: median 10 s, max 25 s) and
   `uv run sync-check` (closed loop, every hand-over checked, latency per call). Conventions
   and heads-up list in `docs/sync.md`.

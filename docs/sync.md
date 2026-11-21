@@ -33,8 +33,8 @@ uv run sync-check --timeline docs/figures/steven/04-sync-timeline.png
 | Sensor period | 5 s (`readings(every=5.0)`). Must work for other periods: real datasets differ. `sync-check --every` tests that. |
 | Alarm | First sensor sample above `sim.ALARM_LEVEL` = 0.03 (10 % of LEL). On the default plant: median 10 s, 90 % within 15 s, max 25 s (200 leaks). |
 | Decision time `t_obs` | = the alarm. At that moment there are only **2 to 6 readings** per sensor (median 3). |
-| What people do | The whole plant evacuates at the alarm, towards the nearest exit. A route replaces that as soon as the models answer. |
-| Latency budget | Route within ~2 s of the readings (timing study: 2 s keeps ~60 % of the gain, 10 s ~0). |
+| What people do | The whole plant evacuates at the alarm in stages (Ahmad's hybrid). People start for the nearest exit at once; the forward-simulation baseline route replaces it within ~0.01 s; the TabPFN route replaces that when it lands. |
+| Latency budget | **Measured** (Ahmad, 30 early-alarm leaks, cloud TabPFN, centroid source): source + hazard + one route takes a median of 3.9 s and 4.9 s at p95. The fast model is ~2.7 s for the hazard call alone. The 2 s target of the timing study is not reachable in the cloud, so we design for **~5 s**. The staged routes cover the gap: in his replay, 1/30 people were exposed with staged routes vs 2/30 with TabPFN alone and 4/30 with the nearest exit. Rayan's locator time still has to be added. |
 | Replanning | Every 10-30 s is enough on this plant. |
 | Hazard forecast | Absolute times `t_obs + 0, 10, ..., 120 s`. On the default plant a typical person is out by about 35 s (alarm ~10 s plus a walk of at most 24 s, no crowding), so the first 30-60 s of the forecast matter most. |
 
@@ -86,9 +86,9 @@ review of unfinished work.
 | 3 | source | `leak_zones(n_zones=100)` merges 110 sites. With 24 sites no merging happens, which is fine, but the zone count now depends on the plant. | Nothing to do; just do not hard-code 100 classes. |
 | 4 | source | No release rate in `SourceEstimate`. | Fill `rate` / `rate_levels` (data.md rule 3). |
 | 5 | source | The library's measured wind is the initial wind. Since sim v1, `readings` reports the mean wind over the window (they differ when `drift` > 0). | Use `sim.readings`, or `wind_at(...).mean()`, so training matches run time. |
-| 6 | hazard | Trained on forecast times 70-180 s; we now ask for `t_obs + 0..120` with `t_obs` ~10-30 s, so times below 70 s are outside training. | Train on the forecast times of section 2. |
-| 7 | hazard | Training uses the true source, true wind and true rate (data.md rule 2), and seed 42 is in the evaluation range 0-99. | Train on estimated inputs; seed >= 1000. |
-| 8 | hazard | One call predicts every grid cell x top-k sources x forecast times: about 600 x 3 x 13 = 23,000 rows. The cost and latency of a cloud call grow with test rows; the budget is ~2 s. | Predict only the cells the planner needs (corridors, around people), or fewer times; measure the latency (step 5). |
+| 6 | hazard | **Done (#24):** context covers early (5 s and later) decisions, with forecasts over 0-120 s after the alarm. | |
+| 7 | hazard | **Done (#24):** trained on sampled estimated sources and measured (noisy) wind, context seed 1001. | Rate still falls back to 1.0 until the source supplies it (#4). |
+| 8 | hazard | **Measured (#24):** querying only open cells cut the rows from 23,400 to 20,085 and the median from 3.68 to 3.45 s (5 cases). The budget is now ~5 s (section 2). | The staged routes make the latency acceptable. Next levers: fewer forecast times, cells near people only, local GPU. |
 | 9 | both | Features use "seconds since the leak started", which a real plant does not know. | See the open question in section 2. |
 
 ## 5. Merge order
