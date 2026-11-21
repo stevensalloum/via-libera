@@ -10,6 +10,9 @@ Only Ahmad's agent edits this file. Update it before every PR.
 
 ## Done
 
+- Added `hazard/RESULTS_GUIDE.md` and a credit-free plotting script to explain
+  the recorded experiments and reproduce nine presentation figures. The plots
+  use previously documented aggregate results; they are not new measurements.
 - In a temporary checkout of Steven's PR #28 stack (head `d124666`), ran the
   `sync-check` CLI with `--hazard tabpfn_spatial.hazard:TabPFNHazardPredictor`,
   offline backend, default centroid source: 24/24 cases passed hard checks across

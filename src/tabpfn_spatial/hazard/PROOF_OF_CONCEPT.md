@@ -4,6 +4,9 @@ Status: **draft for team review**. This document describes the implementation on
 `feat/hazard-tabpfn` and proposes how to evaluate it. Proposed experiments have not
 been run unless explicitly identified as results.
 
+For a presentation-friendly explanation and reproducible figures, see
+[RESULTS_GUIDE.md](RESULTS_GUIDE.md).
+
 ## Purpose and scope
 
 The prototype explores whether a tabular foundation model can turn an estimated
