@@ -142,7 +142,7 @@ def plot_timing(res: dict, path: Path) -> Path:
     import matplotlib.pyplot as plt
 
     green, orange, red, grey = "#00a152", "#ef6c00", "#d50000", "#9e9e9e"
-    fig, ax = plt.subplots(2, 2, figsize=(13, 8.6))
+    fig, ax = plt.subplots(2, 3, figsize=(18, 8.6))
     base, perf = res["alarm"]["baseline"], res["alarm"]["perfect"]
     x = _col(base, "value")
 
@@ -163,6 +163,16 @@ def plot_timing(res: dict, path: Path) -> Path:
     b.set_ylabel("seconds in harmful gas per person")
     b.set_title("What waiting costs: harm vs first decision time", fontsize=10)
 
+    e = ax[0, 2]
+    for rows, m, ls in ((base, "baseline", "-"), (perf, "perfect", "--")):
+        after = _col(rows, "pre_alarm_harm_s")
+        e.plot(x, _col(rows, "live_harm_s") - after, "o" + ls, c=green, label=f"live, {m}")
+        if m == "baseline":
+            e.plot(x, _col(rows, "nearest_harm_s") - after, "o:", c=red, label="nearest exit")
+    e.set_xlabel("first decision time t_alarm = seconds of readings (t_obs)")
+    e.set_ylabel("seconds in harmful gas after the alarm")
+    e.set_title("The part routing controls: harm after the alarm", fontsize=10)
+
     c = ax[1, 0]
     for m, ls in (("baseline", "-"), ("perfect", "--")):
         rows = res["update"][m]
@@ -173,6 +183,7 @@ def plot_timing(res: dict, path: Path) -> Path:
     c.plot(u, _col(res["update"]["baseline"], "nearest_harm_s"), "o:", c=red, label="nearest")
     c.set_xscale("log")
     c.set_xticks(u, [f"{v:g}" for v in u])
+    c.minorticks_off()
     c.set_xlabel("seconds between replans (alarm at 30 s, wind drift 0.15)")
     c.set_ylabel("seconds in harmful gas per person")
     c.set_title("How often to replan", fontsize=10)
@@ -186,6 +197,14 @@ def plot_timing(res: dict, path: Path) -> Path:
     d.set_xlabel("model latency: seconds from readings to route (alarm at 30 s)")
     d.set_ylabel("seconds in harmful gas per person")
     d.set_title("How fast the models must answer (perfect models)", fontsize=10)
+
+    g = ax[1, 2]
+    g.plot(x, 100 * _col(base, "nearest_exposed"), "o:", c=red, label="nearest exit")
+    g.plot(x, 100 * _col(base, "live_exposed"), "o-", c=green, label="live, baseline")
+    g.plot(x, 100 * _col(perf, "live_exposed"), "o--", c=green, alpha=0.6, label="live, perfect")
+    g.set_xlabel("first decision time t_alarm = seconds of readings (t_obs)")
+    g.set_ylabel("% of people with any second in harmful gas")
+    g.set_title("People exposed vs first decision time", fontsize=10)
 
     for axis in (ax[0, 0], ax[0, 1]):
         axis.set_xlabel("first decision time t_alarm = seconds of readings (t_obs)")
