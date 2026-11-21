@@ -11,13 +11,14 @@ import { animateDetails } from "./details.js";
 import { CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer.js";
 import { Navigator } from "./controls.js";
 import { animateMachines } from "./machines.js";
+import { Replay, loadReplay, replayPanel } from "./replay.js";
 import { buildWorld } from "./world.js";
 
 const scene = await (await fetch("data/scene.json")).json();
 const app = document.getElementById("app");
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));  // laptop-friendly
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -49,7 +50,7 @@ world3d.add(new THREE.HemisphereLight("#eef4ff", "#5a5650", 0.55));
 const sun = new THREE.DirectionalLight("#fff1dc", 2.4);
 sun.position.copy(sunDir).multiplyScalar(span * 1.5);
 sun.castShadow = true;
-sun.shadow.mapSize.set(4096, 4096);
+sun.shadow.mapSize.set(2048, 2048);
 const sc = sun.shadow.camera;
 sc.left = sc.bottom = -span * 0.75;
 sc.right = sc.top = span * 0.75;
@@ -73,7 +74,7 @@ gtao.blendIntensity = 0.85;
 composer.addPass(gtao);
 composer.addPass(new OutputPass());
 composer.addPass(new SMAAPass(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio()));
-let highQuality = true;
+let highQuality = false;  // ambient occlusion is heavy: opt in
 const nav = new Navigator(camera, renderer.domElement, scene, F);
 const VIEWS = {
   overview: () => [F.P(-scene.width * 0.15, -scene.height * 0.55, span * 0.55), F.P(scene.width / 2, scene.height / 2, 0)],
@@ -139,6 +140,17 @@ addEventListener("keydown", (e) => {
   if (e.code === "KeyO" && nav.mode === "walk") { $("resume").hidden = true; nav.startOrbit(); }
 });
 
+// ------------------------------------------------------------------------ replay --
+const rep = await loadReplay();
+let replay = null, refreshReplay = null;
+if (rep) {
+  replay = new Replay(rep, world3d, F, parts);
+  refreshReplay = replayPanel(replay);
+  parts.people.visible = false;
+  $("show-people").checked = false;
+  document.body.classList.add("has-replay");
+}
+
 // ----------------------------------------------------------------------- minimap --
 const mini = $("minimap"), mg = mini.getContext("2d");
 const ms = Math.min(240 / scene.width, 160 / scene.height);
@@ -194,15 +206,22 @@ addEventListener("resize", () => {
   composer.setSize(innerWidth, innerHeight);
 });
 const clock = new THREE.Clock();
+const FRAME = 1 / 30;  // cap at 30 fps: smooth enough, half the GPU work
+let since = 0, frame = 0;
 renderer.setAnimationLoop(() => {
-  const dt = Math.min(clock.getDelta(), 0.1);
+  since += clock.getDelta();
+  if (since < FRAME) return;
+  const dt = Math.min(since, 0.1);
+  since = 0;
+  frame++;
   nav.update(dt);
   animateMachines(parts.machines, clock.elapsedTime);
   animateDetails(parts.overhead, clock.elapsedTime);
-  cullLabels();
+  if (frame % 6 === 0) cullLabels();
+  if (replay) { replay.update(dt); if (frame % 3 === 0) refreshReplay(); }
   if (highQuality) composer.render(); else renderer.render(world3d, camera);
   labelRenderer.render(world3d, camera);
   drawMinimap();
 });
-window.__world = { scene, nav, camera, parts };  // for debugging in the console
+window.__world = { scene, nav, camera, parts, replay };  // for debugging in the console
 $("loading").remove();

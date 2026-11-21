@@ -13,6 +13,7 @@ from tabpfn_spatial.sim.scenarios import (
     readings,
     sample_people,
     sample_scenarios,
+    sensor_history,
     sensor_values,
 )
 
@@ -26,6 +27,7 @@ __all__ = [
     "readings",
     "sample_people",
     "sample_scenarios",
+    "sensor_history",
     "sensor_values",
     "simulate",
     "wind_at",

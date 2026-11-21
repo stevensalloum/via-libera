@@ -44,6 +44,21 @@
       border-radius: 50%; background: rgba(255, 255, 255, 0.8); pointer-events: none; }
     #loading { position: fixed; inset: 0; display: grid; place-items: center; background: #1b2026;
       color: var(--accent); font-size: 16px; }
+    #replay { position: fixed; left: 270px; right: 300px; bottom: 12px; background: var(--panel);
+      border-radius: 10px; padding: 10px 14px; backdrop-filter: blur(6px); }
+    #replay .rhead span { color: var(--muted); font-size: 11.5px; }
+    #replay select { width: auto; }
+    #replay .rrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+    #replay .rtrack { position: relative; }
+    #replay input[type=range] { width: 100%; accent-color: var(--accent); }
+    #replay .ticks { position: relative; height: 8px; }
+    #replay .ticks i { position: absolute; width: 2px; height: 8px; background: #19e3ff; }
+    #replay .ticks b { position: absolute; width: 3px; height: 10px; background: #ff3b30; top: -1px; }
+    #r-text { font-size: 12px; color: var(--text); }
+    #r-text .alarm { color: #ff5a4f; font-weight: 700; }
+    #r-text .calm { color: var(--muted); }
+    #r-text .ingas { color: #ff6bf0; }
+    @media (max-width: 1100px) { #replay { left: 12px; right: 12px; bottom: 190px; } }
     kbd { background: #2b333d; border-radius: 3px; padding: 0 4px; border: 1px solid #3d4752; }
   </style>
 </head>
@@ -75,7 +90,7 @@
     <label class="chk"><input type="checkbox" id="show-pipes" checked /> Gas pipes</label>
     <label class="chk"><input type="checkbox" id="show-labels" checked /> Labels</label>
     <label class="chk"><input type="checkbox" id="show-grid" /> Planner grid (solid cells)</label>
-    <label class="chk"><input type="checkbox" id="high-quality" checked /> High quality (ambient occlusion)</label>
+    <label class="chk"><input type="checkbox" id="high-quality" /> High quality (ambient occlusion)</label>
   </div>
   <canvas id="minimap" title="Click to fly there"></canvas>
   <div id="walkhelp" hidden><kbd>W A S D</kbd> walk &middot; <kbd>Shift</kbd> run &middot; mouse look &middot;

@@ -13,9 +13,10 @@ searches whatever the number of people:
   walking beyond the risk-only choice counts double (``DETOUR_WEIGHT``). Only exit doors
   are modelled as bottlenecks in planning (the simulator models every cell).
 
-Replanning keeps the current exit unless another is better by more than ``switch_m``
-metres-equivalent, so people do not flip back and forth. Cost: O(exits * N log N) for the
-fields plus O(people * exits).
+Replanning keeps the current exit unless another is at least ``SWITCH_FRAC`` (20 %) and
+``switch_m`` cheaper, so people do not flip back and forth when the hazard map is diffuse
+or noisy (without it, capacity-aware routing trapped people in a uniform-danger test).
+Cost: O(exits * N log N) for the fields plus O(people * exits).
 """
 
 import numpy as np
@@ -26,6 +27,7 @@ from tabpfn_spatial.sim import Factory
 
 PLANNERS = ("nearest", "risk", "ccrp")
 DETOUR_WEIGHT = 2.0  # ccrp: each extra metre walked to dodge a queue counts double
+SWITCH_FRAC = 0.2  # replanning: change exit only if it is at least 20 % cheaper
 
 
 def _costs(f: Factory, crowd: Crowd, danger: np.ndarray, name: str, risk_weight: float):
@@ -48,6 +50,7 @@ def _queue_aware(
     p: CrowdParams,
     risk_weight: float,
     detour_weight: float = DETOUR_WEIGHT,
+    switch_m: float = 4.0,
 ) -> np.ndarray:
     """Sequential booking of exit doors, earliest arrivals first (CCRP-style).
 
@@ -69,6 +72,9 @@ def _queue_aware(
         extra = np.clip(length[i] - length[i, base], 0, None)
         total = cost[i] + (detour_weight - 1) * extra + (start - arrive[i]) * per_s
         e = int(np.argmin(total))
+        cur = crowd.exit_index[i]
+        if cur >= 0 and total[e] > (1 - SWITCH_FRAC) * total[cur] - switch_m:
+            e = int(cur)  # commit: small or noisy gains do not make people turn around
         choice[i], free[e] = e, start[e] + service
     return choice
 
@@ -87,15 +93,17 @@ def assign(
     if name not in PLANNERS:
         raise ValueError(f"planner must be one of {PLANNERS}, not {name!r}")
     cost, length, fields = _costs(f, crowd, danger, name, risk_weight)
-    keep = crowd.exit_index >= 0
-    cost = cost + switch_m * keep[:, None]
-    cost[keep, crowd.exit_index[keep]] -= switch_m  # staying put is free
     if name == "ccrp":
         choice = _queue_aware(
-            f, crowd, cost, length, danger, t, crowd.p, risk_weight, detour_weight
+            f, crowd, cost, length, danger, t, crowd.p, risk_weight, detour_weight, switch_m
         )
     else:
-        choice = np.argmin(cost if name == "risk" else length, axis=1)
+        score = cost if name == "risk" else length
+        choice = np.argmin(score, axis=1)
+        cur = crowd.exit_index
+        rows = np.flatnonzero(cur >= 0)
+        stay = score[rows, choice[rows]] > (1 - SWITCH_FRAC) * score[rows, cur[rows]] - switch_m
+        choice[rows[stay]] = cur[rows[stay]]  # commit unless clearly better
     for i in np.flatnonzero(crowd.active):
         e = int(choice[i])
         if crowd.routes[i] is None or e != crowd.exit_index[i] or name != "nearest":

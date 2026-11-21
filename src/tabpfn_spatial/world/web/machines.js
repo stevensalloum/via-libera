@@ -204,7 +204,11 @@ export function buildMachine(m, P) {
 
 // Animate flicker, spin, roll and pulse markers.
 export function animateMachines(root, t) {
-  root.traverse((o) => {
+  if (!root.userData.animated) {  // find the animated parts once, not every frame
+    root.userData.animated = [];
+    root.traverse((o) => { const u = o.userData; if (u.flicker || u.spin || u.roll || u.pulse) root.userData.animated.push(o); });
+  }
+  root.userData.animated.forEach((o) => {
     const u = o.userData;
     if (u.flicker && o.isLight) o.intensity = 5 + 2 * Math.sin(t * 13) * Math.sin(t * 7.3);
     if (u.flicker && o.isMesh) o.material.emissiveIntensity = 1.8 + 0.5 * Math.sin(t * 11);

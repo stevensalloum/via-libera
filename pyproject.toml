@@ -28,6 +28,9 @@ sync-check = "tabpfn_spatial.sync:main"
 evac-crowd = "tabpfn_spatial.evac.crowd_study:main"
 evac-crowd-live = "tabpfn_spatial.evac.crowd_viewer:main"
 world = "tabpfn_spatial.world.serve:main"
+closed-loop = "tabpfn_spatial.loop:main"
+evac-pipeline = "tabpfn_spatial.evac.pipeline_view:main"
+milestone = "tabpfn_spatial.milestone:main"
 
 [project.optional-dependencies]
 local = [

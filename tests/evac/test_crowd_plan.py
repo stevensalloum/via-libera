@@ -95,3 +95,39 @@ def test_detour_weight_makes_ccrp_divert_fewer_people() -> None:
         assign("ccrp", F, crowd, ZERO, 0.0, detour_weight=w)
         moved.append(int((crowd.exit_index != 0).sum()))
     assert moved[0] > moved[1] > moved[2] >= 0
+
+
+def test_prepare_runs_the_teams_tabpfn_models_and_logs_each_update() -> None:
+    from tabpfn_spatial.evac.crowd_run import make_models
+
+    sc = Scenario(F.leak_sites[3], 1.4, np.array([0.7, 0.2]))
+    fitted = make_models(F, sc, "tabpfn", backend="baseline", n_train=150)
+    prep = prepare(F, sc, "tabpfn", t_max=30.0, update_s=60.0, seed=0, fitted=fitted)
+    assert len(prep.log) == len(prep.replan_times) == len(prep.danger)
+    first = prep.log[0]
+    assert first["t"] == prep.t_alarm
+    assert first["locate_s"] >= 0 and first["predict_s"] >= 0
+    assert first["source_error_m"] >= 0 and first["rate_median"] > 0
+    assert all(d.min() >= 0 and d.max() <= 1 for d in prep.danger)
+    with pytest.raises(ValueError, match="models"):
+        prepare(F, sc, "magic", t_max=30.0)
+
+
+def test_planners_commit_to_an_exit_under_a_diffuse_hazard_map() -> None:
+    """A smooth, uncertain map (every exit somewhat risky) must not make people flip."""
+    xy = np.random.default_rng(2).uniform([2, 2], [58, 38], (200, 2))
+    xy = xy[[not F.walls[F.cell_of(p)] for p in xy]]
+    danger = np.full((F.ny, F.nx), 0.3)
+    for name in ("risk", "ccrp"):
+        crowd = Crowd(F, xy, P)
+        switches, last, t = 0, None, 0.0
+        while crowd.active.any() and t < 600:
+            if t % 15 == 0:
+                assign(name, F, crowd, danger, t)
+                if last is not None:
+                    switches += int(((crowd.exit_index != last) & crowd.active).sum())
+                last = crowd.exit_index.copy()
+            crowd.step(t)
+            t += 1.0
+        assert not crowd.active.any(), name  # everyone gets out
+        assert switches <= 0.1 * len(xy), (name, switches)

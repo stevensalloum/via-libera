@@ -98,3 +98,29 @@ def readings(
     values[rng.uniform(size=k) < dropout] = np.nan
     wind = wind_at(scenario, times).mean(axis=0) + wind_noise * rng.standard_normal(2)
     return SensorReadings(factory.sensors.copy(), times, values, wind)
+
+
+def sensor_history(
+    factory: Factory,
+    scenario: Scenario,
+    t_max: float,
+    rng: np.random.Generator,
+    every: float = 5.0,
+    **noise: float,
+):
+    """One noisy sensor history for the whole emergency; ``at(t)`` returns it up to ``t``.
+
+    Readings already taken never change (unlike calling ``readings`` again, which redraws
+    the noise). The measured wind at ``t`` is the mean over the samples up to ``t`` plus a
+    fixed measurement error. Use it when the same emergency is read at several moments.
+    """
+    full = readings(factory, scenario, t_max, rng, every, **noise)
+    wind_error = full.wind - wind_at(scenario, full.times).mean(axis=0)
+
+    def at(t: float) -> SensorReadings:
+        k = int(np.searchsorted(full.times, t + 1e-9))
+        times = full.times[: max(k, 1)]
+        wind = wind_at(scenario, times).mean(axis=0) + wind_error
+        return SensorReadings(full.positions, times, full.values[:, : len(times)], wind)
+
+    return at

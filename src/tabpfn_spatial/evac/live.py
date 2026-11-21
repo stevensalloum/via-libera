@@ -20,6 +20,7 @@ readings simulation, the two models, and ``1 + exits`` Dijkstra runs (O(N log N)
 """
 
 import copy
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field, replace
 
@@ -34,7 +35,14 @@ from tabpfn_spatial.contracts import (
 )
 from tabpfn_spatial.evac.planner import WALK_SPEED, RiskAwarePlanner
 from tabpfn_spatial.hazard import hazard_from_fields
-from tabpfn_spatial.sim import Factory, Scenario, first_alarm, readings, simulate
+from tabpfn_spatial.sim import (
+    Factory,
+    Scenario,
+    first_alarm,
+    readings,
+    sensor_history,
+    simulate,
+)
 
 POLICIES = ("live", "once", "nearest")
 FORECAST_STEP = 10.0  # seconds between forecast maps
@@ -210,4 +218,145 @@ def run_live(
                 w.dose += float(fields[k, iy, ix]) * dt
                 w.harmful_s += dt * bool(harm[k, iy, ix])
                 if k >= k_alarm:
+                    w.step(dt, t)
+
+
+# ------------------------------------------------------------ event-driven pipeline --
+@dataclass(frozen=True)
+class Cycle:
+    """One run of the pipeline: readings up to ``t_start`` -> locate -> hazard -> route.
+
+    The route reaches the person at ``t_land`` = ``t_start`` + the time the models took
+    (rounded up to whole simulated seconds). ``samples``: readings per sensor it used.
+    """
+
+    index: int
+    t_start: float
+    t_land: float
+    samples: int
+    locate_s: float
+    predict_s: float
+    source: SourceEstimate
+    hazard: HazardMap
+    source_error_m: float
+    rate_est: float
+
+
+@dataclass(frozen=True)
+class PipelineFrame(Frame):
+    """``Frame`` plus the pipeline: runs that have landed and what is being computed now."""
+
+    cycles: tuple[Cycle, ...] = ()
+    phase: str = ""
+    running: Cycle | None = None
+
+
+def _rate(est: SourceEstimate) -> float:
+    if est.rate is None or est.rate_levels is None:
+        return 1.0
+    return float(np.interp(0.5, est.rate_levels, est.rate))
+
+
+def _phase(t: float, alarm: bool, running: Cycle | None, landed: list, max_runs: int) -> str:
+    if not alarm:
+        return "no alarm yet: nobody moves"
+    if running is not None:
+        n = running.index + 1
+        if t < running.t_start + running.locate_s:
+            return f"run {n}: Rayan's model locating the leak ({running.locate_s:.1f} s)"
+        return f"run {n}: Ahmad's model forecasting the hazard ({running.predict_s:.1f} s)"
+    if not landed:
+        return "alarm: walking to the nearest exit"
+    if len(landed) >= max_runs:
+        return f"all {max_runs} runs done: following the route of run {len(landed)}"
+    return f"route from run {len(landed)}"
+
+
+def run_pipeline(
+    factory: Factory,
+    scenario: Scenario,
+    start: np.ndarray,
+    locator: SourceLocator,
+    predictor: HazardPredictor,
+    planner: RiskAwarePlanner | None = None,
+    t_alarm: float | None = None,
+    max_runs: int = 10,
+    t_max: float = 180.0,
+    dt: float = 1.0,
+    rng: np.random.Generator | None = None,
+    sample_every: float = 5.0,
+    fixed_latency: dict[str, float] | None = None,
+) -> Iterator[PipelineFrame]:
+    """Yield a frame every ``dt`` s; the models run back to back from the alarm.
+
+    No fixed update period: at the alarm everyone heads for the nearest exit and run 1
+    starts with the readings so far (locator, then hazard on its output). When both have
+    answered, the route lands and run 2 starts at once with all readings up to then, and
+    so on for ``max_runs`` runs (after that, everyone is assumed out or on a final route).
+    Time spent in the models is their measured wall time (cloud or offline), unless
+    ``fixed_latency`` = {"locate": s, "predict": s} pins it (tests, reproducible studies).
+    """
+    if max_runs < 1:
+        raise ValueError("max_runs must be >= 1")
+    planner = planner or RiskAwarePlanner()
+    rng = rng or np.random.default_rng()
+    times = np.arange(0.0, t_max + dt / 2, dt)
+    fields = simulate(factory, [scenario], times)[0]
+    toxic, fire = hazard_from_fields(factory, fields)
+    harm = toxic | fire
+    if t_alarm is None:
+        t_alarm = first_alarm(factory, times, fields, every=sample_every)
+    people = {p: Walker(np.asarray(start, float).copy(), planner.speed) for p in POLICIES}
+    history = sensor_history(factory, scenario, t_max, rng, every=sample_every)
+    started: list[Cycle] = []
+    landed: list[Cycle] = []
+    running: Cycle | None = None
+    r = None
+    options: list[ExitOption] = []
+    for k, t in enumerate(times):
+        t = float(t)
+        alarm = t_alarm is not None and t >= t_alarm - 1e-9
+        if alarm and t_alarm is not None and abs(t - t_alarm) < dt / 2:
+            calm = np.zeros((1, factory.ny, factory.nx))
+            for w in people.values():
+                _steer(w, factory, planner, HazardMap(np.array([t]), calm, calm), t)
+        if running is not None and t >= running.t_land - 1e-9:  # the route lands
+            if people["live"].out_at is None:
+                options = exit_options(factory, planner, people["live"].pos, running.hazard, t)
+            _steer(people["live"], factory, planner, running.hazard, t)
+            if not landed:
+                _steer(people["once"], factory, planner, running.hazard, t)
+            landed.append(running)
+            running = None
+        if alarm and running is None and len(started) < max_runs and people["live"].out_at is None:
+            r = history(t)  # every reading so far; old ones never change
+            t0 = time.perf_counter()
+            est = locator.locate(factory, r)
+            t1 = time.perf_counter()
+            hz = predictor.predict(
+                factory, r, est, t + np.arange(0.0, HORIZON + 1e-9, FORECAST_STEP)
+            )
+            t2 = time.perf_counter()
+            loc_s, pred_s = (t1 - t0, t2 - t1) if fixed_latency is None else (
+                fixed_latency["locate"], fixed_latency["predict"])  # fmt: skip
+            iy, ix = est.top_cells(1)[0]
+            err = float(np.linalg.norm(factory.centre(int(iy), int(ix)) - scenario.source))
+            t_land = t + max(dt, float(np.ceil((loc_s + pred_s) / dt - 1e-9)) * dt)
+            running = Cycle(
+                len(started), t, t_land, len(r.times), loc_s, pred_s, est, hz, err, _rate(est)
+            )
+            started.append(running)
+        last = landed[-1] if landed else None
+        snap = {p: copy.deepcopy(w) for p, w in people.items()}
+        yield PipelineFrame(
+            t, fields[k], harm[k], snap, r, last.source if last else None,
+            last.hazard if last else None, options, bool(landed) and landed[-1].t_land == t,
+            alarm, t_alarm, tuple(landed), _phase(t, alarm, running, landed, max_runs), running,
+        )  # fmt: skip
+        for w in people.values():
+            if w.out_at is None:
+                iy, ix = factory.cell_of(w.pos)
+                w.dose += float(fields[k, iy, ix]) * dt
+                w.harmful_s += dt * bool(harm[k, iy, ix])
+                if alarm:
                     w.step(dt, t)
