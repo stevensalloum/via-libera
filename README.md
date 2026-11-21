@@ -56,7 +56,7 @@ from tabpfn_spatial.core.grid import Grid2D
 from tabpfn_spatial.core.metrics import coverage, crps
 from tabpfn_spatial.core.models import make_regressor
 
-model = make_regressor("cloud")          # "local", "baseline" or "auto"
+model = make_regressor("cloud")  # "local", "baseline" or "auto"
 dist = model.fit(X_readings, y_readings).predict_dist(Grid2D((0, 10), (0, 10), 60, 60).points())
 dist.mean, dist.median, dist.width(0.9)  # per-cell prediction and uncertainty
 ```
