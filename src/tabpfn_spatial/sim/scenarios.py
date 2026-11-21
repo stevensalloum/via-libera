@@ -47,6 +47,28 @@ def sensor_values(factory: Factory, fields: np.ndarray) -> np.ndarray:
     return fields[..., cells[:, 0], cells[:, 1]]
 
 
+ALARM_LEVEL = 0.03  # 10 % of LEL: a typical first alarm setting of a fixed gas detector
+
+
+def first_alarm(
+    factory: Factory,
+    times: np.ndarray,
+    fields: np.ndarray,
+    level: float = ALARM_LEVEL,
+    every: float = 5.0,
+) -> float | None:
+    """Time of the first detector sample (every ``every`` s) where any sensor reads > level.
+
+    ``fields`` (T, ny, nx) at ``times``; samples fall on multiples of ``every`` within
+    ``times`` (the nearest field time is used). None if no sensor ever alarms. O(T * k).
+    """
+    times = np.asarray(times, dtype=float)
+    samples = np.arange(0.0, times[-1] + 1e-9, every)
+    k = np.abs(times[None] - samples[:, None]).argmin(axis=1)
+    above = (sensor_values(factory, fields[k]) > level).any(axis=1)
+    return float(samples[above.argmax()]) if above.any() else None
+
+
 def readings(
     factory: Factory,
     scenario: Scenario,
