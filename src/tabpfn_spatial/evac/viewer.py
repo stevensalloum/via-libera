@@ -36,7 +36,7 @@ class Config:
 
     seed: int = 0
     start: np.ndarray | None = None  # metres; None = random open spot
-    t_alarm: float = 30.0
+    t_alarm: float | None = None  # None = first gas detector alarm
     update_s: float = 5.0
     t_max: float = 180.0
     drift: float = 0.05
@@ -139,7 +139,9 @@ def add_legend(fig) -> None:
 
 def side_text(fr: Frame, cfg: Config) -> str:
     """Exit table of the latest update and each person's score so far."""
-    lines = [f"replan every {cfg.update_s:.0f} s  |  alarm at {cfg.t_alarm:.0f} s", ""]
+    how = "fixed" if cfg.t_alarm is not None else "detector"
+    when = f"{fr.t_alarm:.0f} s ({how})" if fr.t_alarm is not None else "no detector alarm"
+    lines = [f"replan every {cfg.update_s:.0f} s  |  alarm at {when}", ""]
     if fr.options:
         best = min(fr.options, key=lambda o: o.cost).exit_index
         lines.append("exits at last update   walk   ETA    P(harm)")
@@ -266,14 +268,21 @@ def save_gif(f: Factory, cfg: Config, path: Path, every: int = 2, fps: int = 10)
     return path
 
 
-def save_story(f: Factory, cfg: Config, moments: list[float], path: Path) -> Path:
-    """Four moments of one run side by side, plus the dose curves (the journey figure)."""
+def save_story(f: Factory, cfg: Config, moments: list[float] | None, path: Path) -> Path:
+    """Four moments of one run side by side, plus the dose curves (the journey figure).
+
+    ``moments=None``: the alarm, 20 s and 45 s later, and the end of the run.
+    """
     import matplotlib
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    sc, _, frames = make_run(f, cfg)
+    sc, _, run = make_run(f, cfg)
+    frames = list(run)
+    if moments is None:
+        ta = frames[0].t_alarm if frames[0].t_alarm is not None else cfg.t_max / 4
+        moments = [ta, min(ta + 20, cfg.t_max), min(ta + 45, cfg.t_max), cfg.t_max]
     history, shots = [], {}
     for fr in frames:
         history.append((fr.t, {p: w.dose for p, w in fr.walkers.items()}))
@@ -311,7 +320,7 @@ def compare(f: Factory, cfg: Config, n: int) -> dict[str, dict[str, float]]:
                      cfg.sigma, cfg.hazard)  # fmt: skip
         _, _, frames = make_run(f, run)
         for fr in frames:
-            if fr.t == cfg.t_alarm:
+            if fr.t == fr.t_alarm:
                 pre += fr.walkers["live"].harmful_s
             last = fr
         for p, w in last.walkers.items():
@@ -328,7 +337,7 @@ def main() -> int:
     p = argparse.ArgumentParser(description="Watch one evacuation replanned live.")
     p.add_argument("--seed", type=int, default=0, help="which leak")
     p.add_argument("--at", type=float, nargs=2, metavar=("X", "Y"), help="person start (m)")
-    p.add_argument("--alarm", type=float, default=30.0, help="seconds until the alarm")
+    p.add_argument("--alarm", type=float, help="alarm at this second (default: first detector)")
     p.add_argument("--update", type=float, default=5.0, help="seconds between replans")
     p.add_argument("--t-max", type=float, default=180.0)
     p.add_argument("--drift", type=float, default=0.05, help="wind direction wander")
@@ -350,8 +359,7 @@ def main() -> int:
             print(f"{k:8}", "  ".join(f"{m} {x:.2f}" for m, x in v.items()))
         return 0
     if a.story:
-        moments = [a.alarm, a.alarm + 20, a.alarm + 45, a.t_max]
-        print(save_story(f, cfg, moments, a.story))
+        print(save_story(f, cfg, None, a.story))
         return 0
     import matplotlib.pyplot as plt
     from matplotlib.animation import FuncAnimation

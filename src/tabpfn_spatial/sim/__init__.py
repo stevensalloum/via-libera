@@ -7,13 +7,22 @@ plant's sensors measure. Everything other areas train on comes from here.
 
 from tabpfn_spatial.sim.factory import FITTING_WEIGHT, Factory, Machine
 from tabpfn_spatial.sim.plume import Scenario, simulate, wind_at
-from tabpfn_spatial.sim.scenarios import readings, sample_people, sample_scenarios, sensor_values
+from tabpfn_spatial.sim.scenarios import (
+    ALARM_LEVEL,
+    first_alarm,
+    readings,
+    sample_people,
+    sample_scenarios,
+    sensor_values,
+)
 
 __all__ = [
+    "ALARM_LEVEL",
     "FITTING_WEIGHT",
     "Factory",
     "Machine",
     "Scenario",
+    "first_alarm",
     "readings",
     "sample_people",
     "sample_scenarios",
