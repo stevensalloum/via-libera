@@ -2,6 +2,16 @@
 
 Newest first. Each entry: date, decision, why, alternatives considered.
 
+## 2026-11-21: TabPFN cloud API via tabpfn-client, budget-aware
+
+- **Decision:** use `tabpfn-client` (cloud, TabPFN-3.5) as the default backend; key in
+  `TABPFN_TOKEN` via `.env`; `uv run tabpfn-check` verifies each laptop.
+- **Measured:** limit shows 50M credits per key (resets 2026-12-01); every call costs at
+  least 10,000 tokens; 20k+20k x 50 = 11.1k, 50k+50k x 100 = 37.8k, 1k+100k x 10 = 26.6k,
+  1k+1M x 10 = 1.97M. So batch queries; avoid per-point loops.
+- **Why:** no GPU or multi-GB install needed on any laptop (Rayan: Windows, Ahmad: MacBook Air).
+- **Alternatives:** local `tabpfn` with PyTorch (decide after the idea is fixed).
+
 ## 2026-11-21: Keep AI co-author trailers
 
 - **Decision:** commits keep the agent's `Co-Authored-By:` trailer; Claude Code's default
