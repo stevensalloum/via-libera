@@ -24,9 +24,13 @@ class OracleLocator:
         self.rng = rng or np.random.default_rng()
 
     def locate(self, factory: Factory, readings: SensorReadings | None) -> SourceEstimate:
-        """Gaussian of width max(sigma, cell) times the leak prior; true rate as quantiles."""
+        """Gaussian of width max(sigma, cell / 2) times the leak prior; true rate as quantiles.
+
+        The floor of half a cell keeps ``sigma=0`` exact: a neighbouring fitting (prior x5)
+        never outranks the true cell.
+        """
         centre = self.scenario.source + self.rng.normal(0.0, self.sigma, 2) * (self.sigma > 0)
-        width = max(self.sigma, factory.cell)
+        width = max(self.sigma, factory.cell / 2)
         d2 = ((factory.centres() - centre) ** 2).sum(axis=-1)
         prob = (np.exp(-d2 / (2 * width**2)) + 1e-12) * factory.leak_prior
         levels = np.array([0.1, 0.5, 0.9])

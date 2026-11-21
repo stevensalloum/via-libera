@@ -54,6 +54,14 @@ def test_oracle_locator_is_a_map_on_the_pipes_near_the_truth() -> None:
     assert np.linalg.norm(F.centre(iy, ix) - sc.source) < 8.0
 
 
+def test_exact_oracle_locator_points_at_the_true_cell_even_next_to_a_fitting() -> None:
+    fit = {F.cell_of(s) for s in F.leak_sites if F.fittings[F.cell_of(s)]}
+    for xy in F.leak_sites:  # every site, including plain pipe next to a fitting
+        sc = Scenario(xy, 1.0, np.array([1.0, 0.0]))
+        iy, ix = OracleLocator(sc, sigma=0.0).locate(F, None).top_cells(1)[0]
+        assert (iy, ix) == F.cell_of(xy), (xy, fit)
+
+
 def test_oracle_hazard_is_the_true_future() -> None:
     sc = Scenario(F.leak_sites[5], 1.0, np.array([1.0, 0.0]))
     hz = OracleHazard(sc).predict(F, None, None, np.array([30.0, 90.0]))
