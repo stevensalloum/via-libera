@@ -3,7 +3,9 @@
 TabPFN for spatial awareness in robotics. Built at the Berlin AIxRobotics Hackathon
 (Prior Labs track).
 
-> Project description, results and demo instructions will be filled in during the hackathon.
+**Gas-leak emergencies in a factory:** from sparse sensors and the wind, locate the leak,
+predict where it turns toxic or flammable, and route every person out on the safest path.
+See [docs/brief.md](docs/brief.md). Run the whole pipeline: `uv run leak-demo`.
 
 ## Team
 
@@ -47,6 +49,32 @@ growing mainly with test rows (1k train + 100k test x 10 cols = 26.6k; 1M test r
 Batch your queries into few large `predict` calls; quote first with
 `tabpfn_client.estimate_cost` (free, sends only shapes).
 
+## Shared starter (`tabpfn_spatial.core`)
+
+Every application builds on the same pieces:
+
+```python
+from tabpfn_spatial.core.grid import Grid2D
+from tabpfn_spatial.core.metrics import coverage, crps
+from tabpfn_spatial.core.models import make_regressor
+
+model = make_regressor("cloud")  # "local", "baseline" or "auto"
+dist = model.fit(X_readings, y_readings).predict_dist(Grid2D((0, 10), (0, 10), 60, 60).points())
+dist.mean, dist.median, dist.width(0.9)  # per-cell prediction and uncertainty
+```
+
+| Module | What it gives you |
+|---|---|
+| `dist` | `QuantileDist`: quantiles, `interval(0.9)`, `width`, mean, mode |
+| `models` | `make_regressor` / `make_classifier` over TabPFN cloud, TabPFN local, k-NN baselines |
+| `budget` | `CostGuard`: free quote before every cloud call, refuses calls above 200k tokens |
+| `grid` | `Grid2D`: a whole map as one batched query, and back to an image |
+| `metrics` | `crps`, `coverage`, `ece`: the numbers to pitch |
+| `viz` | `plot_map`: truth / mean / uncertainty heatmaps |
+| `example` | `uv run spatial-example --backend cloud`: full map from 200 sparse readings |
+
+Local TabPFN (PyTorch, GPU if available, multi-GB download): `uv sync --extra local`.
+
 ## Daily flow
 
 1. Start of every work block: `git switch main && git pull`
@@ -84,11 +112,16 @@ CI fails if `requirements.txt` is out of sync with `uv.lock`.
 
 ```
 src/tabpfn_spatial/
-  data/      simulation and datasets
-  models/    TabPFN wrappers, features, evaluation
-  demo/      agent, visuals, demo
-tests/       pytest + hypothesis suite (fast, runs in CI on every PR)
+  contracts.py  interfaces between the areas
+  pipeline.py   end to end: leak -> source -> hazard -> evacuation, scored on truth
+  sim/          factory layout and gas-dispersion simulator        (Steven)
+  source/       leak source detection                             (Rayan)
+  hazard/       toxic / fire hazard prediction                    (Ahmad)
+  evac/         evacuation planning                               (Steven)
+  core/         TabPFN backends, distributions, grids, metrics, budget guard
+tests/          mirrors src/ (fast, runs in CI on every PR)
 docs/
+  brief.md       project brief, tasks, targets, milestones
   decisions.md   design decisions log
   status/        per-person status files
 ```

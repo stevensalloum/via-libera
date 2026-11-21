@@ -1,10 +1,14 @@
-"""TabPFN for spatial awareness in robotics.
+"""TabPFN for spatial awareness: gas-leak emergencies in a factory.
 
-Subpackages are owned by one person each (see CLAUDE.md, "Ownership"):
+Areas (one owner each, see AGENTS.md):
 
-- ``tabpfn_spatial.data``: simulation and datasets.
-- ``tabpfn_spatial.models``: TabPFN wrappers, features, evaluation.
-- ``tabpfn_spatial.demo``: agent, visuals, demo.
+- ``tabpfn_spatial.sim``: factory layout and gas-dispersion simulator.
+- ``tabpfn_spatial.source``: leak source detection.
+- ``tabpfn_spatial.hazard``: toxic / fire hazard prediction.
+- ``tabpfn_spatial.evac``: evacuation planning.
+
+Shared: ``contracts`` (interfaces), ``pipeline`` (end to end), ``core`` (TabPFN backends,
+distributions, grids, metrics, budget guard).
 """
 
 __version__ = "0.1.0"
