@@ -4,7 +4,7 @@ Only Ahmad's agent edits this file. Update it before every PR.
 
 ## Doing
 
-- Multi-layout verification: 117 paired case variations from 28 base leaks in
+- Multi-layout verification (#39): 117 paired case variations from 28 base leaks in
   two layouts completed before the requested time limit; groups are incomplete
   and uneven. Full settings, route baselines and limitations are in
   `hazard/MULTIPLANT_RESULTS.md`.
