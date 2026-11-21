@@ -35,6 +35,9 @@ class CrowdParams:
     gamma: float = 1.913  # Weidmann's fit, 1/m^2
 
 
+DEFAULT_PARAMS = CrowdParams()
+
+
 def weidmann_speed(rho: float, p: CrowdParams) -> float:
     """Walking speed (m/s) at density ``rho`` (people/m^2)."""
     if rho >= p.rho_max:
@@ -65,7 +68,7 @@ def sample_workers(
 class Crowd:
     """State of everyone in the plant; ``step`` advances one ``dt``."""
 
-    def __init__(self, f: Factory, positions: np.ndarray, p: CrowdParams = CrowdParams()):
+    def __init__(self, f: Factory, positions: np.ndarray, p: CrowdParams = DEFAULT_PARAMS):
         """People start at ``positions`` (n, 2) metres, standing, without a route."""
         self.f, self.p = f, p
         self.cells = np.array([f.cell_of(xy) for xy in np.atleast_2d(positions)], dtype=int)
