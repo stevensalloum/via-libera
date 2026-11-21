@@ -351,3 +351,46 @@ walking meanwhile, and the baseline stage recovers part of the rest.
 
 **Next:** the live and crowd loops get the staged policy (baseline route, then the TabPFN
 route after a measured latency), and the crowd ladder is rerun with a 5 s latency.
+
+## 2026-11-21 · A 3D factory you can walk through
+
+**What changed and why.** The 2D plots prove the models work. Pitching them needs a world
+people recognise as a factory: other teams show realistic plants. `uv run world` exports
+the plant and opens a Three.js viewer at http://127.0.0.1:8770.
+
+- **Same obstacles as the model.** Every solid thing in 3D comes from the planner's
+  `Factory`:
+  - machine footprints are exact, and their 3D models stay inside them;
+  - the inner wall is the solid non-machine cells;
+  - the outer walls open only at the exits;
+  - walking mode collides with the same solid grid the evacuation planner uses.
+
+  The "Planner grid" layer draws the solid cells on top, so anyone can check that 3D
+  equals the model.
+- **What is drawn:**
+  - a concrete floor with slab joints, yellow walkway lines and hatched ignition zones;
+  - clad walls on a concrete plinth, with green exit doors and lit EXIT signs;
+  - steel portal frames with high-bay lamps;
+  - machines modelled by kind: tanks with domes and a catwalk, a brick furnace with a
+    glowing door and chimney, blue compressor vessels, press frames over a conveyor, a
+    genset with exhaust stacks, a rotary dryer drum;
+  - yellow overhead gas pipes (the usual colour for gas lines) with valves at every
+    fitting and drops into the machines they feed;
+  - gas sensors on poles, labels and a clickable minimap.
+- **Moving around:** orbit, fly-to presets (overview, top, inside, any machine or exit),
+  and "Walk inside" at eye height (`WASD`, `Shift` to run).
+- **Plants:** the default plant, or a random 120 x 80 m one with `uv run world --plant random`.
+
+**Next:** put the simulation in the world, in three steps on one timeline.
+1. People at their workstations; the leak; sensors lighting up as gas arrives.
+2. The models at the alarm: source map, and hazard now, at t+30 s and t+60 s (Ahmad's
+   horizons) as coloured volumes.
+3. Routes and the crowd moving, with commands to close the doors of rooms that will be in
+   danger.
+
+**What did not work.**
+- The first catwalk railings were drawn as solid yellow panels; they are now posts and
+  rails.
+- The planner-grid overlay was hidden under the machines; it is now drawn on top.
+- Labels showed through walls at eye level; near the floor only labels within 22 m are
+  shown.
