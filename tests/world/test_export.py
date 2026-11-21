@@ -77,3 +77,14 @@ def test_random_plants_export_too() -> None:
                              n_hot=4, exits_per_side=2, sensor_spacing=15.0))  # fmt: skip
     assert len(s["exits"]) == 8 and s["pipes"]
     json.dumps(s)
+
+
+def test_people_stand_on_open_floor_where_the_crowd_model_puts_them() -> None:
+    from tabpfn_spatial.evac.crowd import sample_workers
+
+    s = scene(F, people=80, seed=4)
+    xy = np.array(s["people"])
+    assert xy.shape == (80, 2)
+    np.testing.assert_allclose(xy, sample_workers(F, 80, np.random.default_rng(4)))
+    assert not any(F.walls[F.cell_of(p)] for p in xy)
+    assert scene(F)["people"] == []
