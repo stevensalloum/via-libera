@@ -1,13 +1,15 @@
-"""TabPFN leak locator: simulation-based inference in one forward pass.
+"""TabPFN leak locator, updated every sensor sample after the first alarm.
 
-``fit`` simulates a library of seeded leaks (features -> zone) and fits a classifier on
-it; ``locate`` turns ``predict_proba`` for the new readings into a probability map, each
-zone's probability spread evenly over its leak-site cells. The map is naturally
-multimodal ("valve A *or* B"). Use ``locate_many`` to batch many emergencies into one call
-(cloud: one call costs >= 10,000 tokens, so batch benchmarks).
+``fit`` simulates a table of seeded leaks, one row per (leak, moment after its alarm),
+and fits a classifier on it (answer = leak zone). ``locate`` finds the alarm in the
+readings, builds one 31-column row for "now" and turns ``predict_proba`` into a map,
+each zone's probability spread evenly over its leak-site cells. Before any alarm the map
+is the plant's prior (``factory.leak_prior``). Call it every 5 s: each call is
+independent, the row's arrival times carry the history.
 
-Cost: fit = one simulation of ``n_train`` leaks (~0.4 s per 100) + upload;
-locate_many = one ``predict_proba`` call for all rows. TabPFN context: n_train <= 10,000.
+Cost: fit = one simulation of ``n_train`` leaks + upload; ``locate_many`` = one
+``predict_proba`` call for all rows (cloud: >= 10,000 tokens per call, batch benchmarks).
+Table rows = n_train x len(ws), kept under TabPFN's ~10,000-row context.
 """
 
 from collections.abc import Sequence
@@ -15,10 +17,12 @@ from collections.abc import Sequence
 import numpy as np
 
 from tabpfn_spatial.contracts import SensorReadings, SourceEstimate
-from tabpfn_spatial.core.models import Classifier, make_classifier
+from tabpfn_spatial.core.models import BaselineClassifier, Classifier, make_classifier
 from tabpfn_spatial.sim import Factory
-from tabpfn_spatial.source.features import feature_matrix
-from tabpfn_spatial.source.library import Zones, leak_zones, make_library
+from tabpfn_spatial.source.features import alarm_time, moment_row
+from tabpfn_spatial.source.library import DEFAULT_WS, Zones, build_library, leak_zones
+
+_NAN_FILL = -1.0  # the k-NN stand-in cannot read NaN (dead sensors); TabPFN can
 
 
 class TabPFNLocator:
@@ -27,28 +31,34 @@ class TabPFNLocator:
     def __init__(
         self,
         backend: str = "cloud",
-        n_train: int = 3000,
+        n_train: int = 1200,
         seed: int = 12_345,
+        ws: Sequence[float] = DEFAULT_WS,
         n_zones: int = 100,
         classifier: Classifier | None = None,
     ) -> None:
-        """``seed`` drives the training leaks; evaluate on other seeds.
+        """Configure the table and the model; nothing is simulated until ``fit``.
 
-        ``classifier`` overrides ``make_classifier(backend)`` (tests inject fakes).
+        ``seed`` drives the training leaks (evaluate on other seeds); ``ws`` = moments
+        after the alarm (s) put in the table. ``classifier`` overrides ``backend`` (tests).
         """
-        self.backend, self.n_train, self.seed, self.n_zones = backend, n_train, seed, n_zones
-        self.classifier = classifier
+        self.backend, self.n_train, self.seed = backend, n_train, seed
+        self.ws, self.n_zones, self.classifier = tuple(ws), n_zones, classifier
         self._factory: Factory | None = None
 
     def fit(self, factory: Factory) -> "TabPFNLocator":
-        """Simulate the training library for ``factory`` and fit the classifier."""
-        X, zone = make_library(factory, self.n_train, self.seed, self.n_zones)
+        """Simulate the table for ``factory`` and fit the classifier on it."""
+        lib = build_library(factory, self.n_train, self.seed, self.ws, self.n_zones)
         self.zones: Zones = leak_zones(factory, self.n_zones)
         self.model = self.classifier or make_classifier(self.backend)
-        self.model.fit(X, zone)
+        self.model.fit(self._ready(lib.X), lib.zone)
         self._spread = self._zone_to_grid(factory)
         self._factory = factory
         return self
+
+    def _ready(self, X: np.ndarray) -> np.ndarray:
+        """Fill NaN only for the k-NN stand-in; TabPFN handles missing values itself."""
+        return np.nan_to_num(X, nan=_NAN_FILL) if isinstance(self.model, BaselineClassifier) else X
 
     def _zone_to_grid(self, factory: Factory) -> np.ndarray:
         """(n_zones, ny * nx) matrix spreading each zone evenly over its site cells."""
@@ -58,23 +68,42 @@ class TabPFNLocator:
             m[z, iy * factory.nx + ix] = 1.0
         return m / m.sum(axis=1, keepdims=True)
 
+    def rows(self, readings: Sequence[SensorReadings]) -> tuple[np.ndarray, list[int]]:
+        """Feature rows for the readings that have alarmed, and their positions."""
+        X, which = [], []
+        for i, r in enumerate(readings):
+            t_a = alarm_time(r.times, r.values)
+            if t_a is not None:
+                X.append(moment_row(r.times, r.values, r.wind, t_a))
+                which.append(i)
+        return np.array(X), which
+
     def zone_proba(self, factory: Factory, readings: Sequence[SensorReadings]) -> np.ndarray:
-        """(n, n_zones) zone probabilities in zone order, one batched model call."""
+        """(n, n_zones) zone probabilities; prior mass per zone where no alarm yet."""
         if self._factory is not factory:
             self.fit(factory)
-        X = np.vstack([feature_matrix(r.times, r.values[None], r.wind[None]) for r in readings])
-        p = np.asarray(self.model.predict_proba(X), dtype=float)
-        full = np.zeros((len(X), self.zones.n_zones))
-        full[:, np.asarray(self.model.classes_, dtype=int)] = p  # zones unseen in training: 0
-        return full / full.sum(axis=1, keepdims=True)
+        prior = self._spread @ factory.leak_prior.ravel()
+        out = np.tile(prior / prior.sum(), (len(readings), 1))
+        X, which = self.rows(readings)
+        if which:
+            p = np.asarray(self.model.predict_proba(self._ready(X)), dtype=float)
+            full = np.zeros((len(which), self.zones.n_zones))
+            full[:, np.asarray(self.model.classes_, dtype=int)] = p
+            out[which] = full / full.sum(axis=1, keepdims=True)
+        return out
 
     def locate_many(
         self, factory: Factory, readings: Sequence[SensorReadings]
     ) -> list[SourceEstimate]:
-        """Probability maps for many emergencies from one batched call."""
-        grids = self.zone_proba(factory, readings) @ self._spread
-        return [SourceEstimate(g.reshape(factory.ny, factory.nx)) for g in grids]
+        """Maps for many moments or emergencies from one batched model call."""
+        probs = self.zone_proba(factory, readings)
+        out = []
+        for r, p in zip(readings, probs, strict=True):
+            alarmed = alarm_time(r.times, r.values) is not None
+            grid = (p @ self._spread).reshape(factory.ny, factory.nx)
+            out.append(SourceEstimate(grid if alarmed else factory.leak_prior.copy()))
+        return out
 
     def locate(self, factory: Factory, readings: SensorReadings) -> SourceEstimate:
-        """Probability map of the leak location (fits on first use)."""
+        """Probability map of the leak location now (fits on first use)."""
         return self.locate_many(factory, [readings])[0]

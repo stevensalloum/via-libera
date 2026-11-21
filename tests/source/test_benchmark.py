@@ -17,7 +17,7 @@ def test_map_to_zones_sums_cell_probability_per_zone() -> None:
     z = leak_zones(f, 50)
     a, b = np.random.default_rng(0).choice(len(f.leak_sites), size=2, replace=False)
     p = map_to_zones(f, z, [_point_map(f, f.leak_sites[i]) for i in (a, b)])
-    assert p.shape == (2, z.n_zones)  # zone count depends on the plant (24 pipe sites here)
+    assert p.shape == (2, z.n_zones)
     np.testing.assert_allclose(p.sum(axis=1), 1.0)
     assert p[0, z.site_zone[a]] == 1.0 and p[1, z.site_zone[b]] == 1.0
 
@@ -31,10 +31,11 @@ def test_perfect_maps_score_perfectly() -> None:
     assert m["top1"] == 1.0 and m["top3"] == 1.0 and m["ece"] == 0.0
 
 
-def test_held_out_is_seeded() -> None:
+def test_held_out_gives_readings_at_each_moment_after_the_alarm() -> None:
     f = Factory.default()
-    s1, r1 = held_out(f, 3, seed=9)
-    s2, r2 = held_out(f, 3, seed=9)
-    np.testing.assert_array_equal(s1, s2)
-    np.testing.assert_array_equal(r1[0].values, r2[0].values)
-    assert len(r1) == 3 and r1[0].values.shape == (len(f.sensors), 13)
+    h = held_out(f, 4, seed=9, ws=(0.0, 10.0))
+    assert len(h.readings) == len(h.sources) == len(h.w)
+    for r, w, t_a in zip(h.readings, h.w, h.t_alarm, strict=True):
+        assert r.times[-1] == t_a + w
+    h2 = held_out(f, 4, seed=9, ws=(0.0, 10.0))
+    np.testing.assert_array_equal(h.readings[0].values, h2.readings[0].values)

@@ -1,50 +1,62 @@
-"""Feature rows for leak localisation: one row per leak, from the sensor time series.
+"""One feature row per moment, on a clock that starts at the first alarm.
 
-Per sensor: ``log1p`` of the reading at a few times (default 20, 40, 60 s) and the
-arrival time (first sample above ``level``); plus the measured wind u, v. With 14 sensors
-and 3 times that is 14 * 3 + 14 + 2 = 58 columns. Time O(B * k * t).
+A real plant does not know when the leak started, only when a detector first alarmed.
+So every time here is relative to that alarm. Per sensor the row holds two numbers:
+
+- ``log1p`` of its latest reading (how much gas is there now),
+- its arrival time: first sample above ``ARRIVAL_LEVEL``, in seconds relative to the
+  alarm (negative = before the alarm; "not yet" = one sample step after now),
+
+then the measured wind u, v and the seconds since the alarm. With k sensors that is
+2k + 3 columns (31 for the default plant's 14). The arrival time carries the history, so
+one row per update is enough. Dead sensors (NaN rows) give NaN columns.
+Time O(k * t) per row.
 """
-
-from collections.abc import Sequence
 
 import numpy as np
 
-from tabpfn_spatial.contracts import SensorReadings
+from tabpfn_spatial.sim import ALARM_LEVEL
 
-DEFAULT_TIMES: tuple[float, ...] = (20.0, 40.0, 60.0)
-ARRIVAL_LEVEL = 0.01  # concentration that counts as "gas has arrived" (10 % of toxic)
-
-
-def n_features(n_sensors: int, at: Sequence[float] = DEFAULT_TIMES) -> int:
-    """Number of columns ``feature_matrix`` produces."""
-    return n_sensors * (len(at) + 1) + 2
+ARRIVAL_LEVEL = 0.01  # "gas has reached this sensor" (a third of the alarm level)
 
 
-def feature_matrix(
-    times: np.ndarray,
-    values: np.ndarray,
-    wind: np.ndarray,
-    at: Sequence[float] = DEFAULT_TIMES,
-    level: float = ARRIVAL_LEVEL,
+def n_features(n_sensors: int) -> int:
+    """Number of columns of ``moment_row``."""
+    return 2 * n_sensors + 3
+
+
+def feature_names(n_sensors: int) -> list[str]:
+    """Column names, in row order."""
+    return (
+        [f"log1p_now_s{i}" for i in range(n_sensors)]
+        + [f"arrival_s{i}" for i in range(n_sensors)]
+        + ["wind_u", "wind_v", "seconds_since_alarm"]
+    )
+
+
+def _first_above(times: np.ndarray, values: np.ndarray, level: float) -> np.ndarray:
+    """(k,) time of each sensor's first sample above ``level``; inf if none, NaN if dead."""
+    above = np.nan_to_num(values, nan=-np.inf) > level
+    first = np.where(above.any(axis=1), times[above.argmax(axis=1)], np.inf)
+    return np.where(np.isnan(values).all(axis=1), np.nan, first)
+
+
+def alarm_time(times: np.ndarray, values: np.ndarray, level: float = ALARM_LEVEL) -> float | None:
+    """First sample time where any working sensor reads above ``level``; None if none yet."""
+    first = _first_above(np.asarray(times, dtype=float), np.asarray(values, dtype=float), level)
+    t = np.nanmin(first) if np.isfinite(first).any() else np.inf
+    return float(t) if np.isfinite(t) else None
+
+
+def moment_row(
+    times: np.ndarray, values: np.ndarray, wind: np.ndarray, t_alarm: float
 ) -> np.ndarray:
-    """(B, n_features) rows from ``values`` (B, k, t) sampled at ``times`` and ``wind`` (B, 2).
-
-    The reading "at" a time is the latest sample not after it. A sensor that never
-    exceeds ``level`` gets arrival time one sample step after the last sample.
-    """
+    """(2k + 3,) row from readings ``values`` (k, t) up to now (``times[-1]``)."""
     times = np.asarray(times, dtype=float)
     values = np.asarray(values, dtype=float)
-    idx = np.clip(np.searchsorted(times, np.asarray(at, dtype=float), side="right") - 1, 0, None)
-    logs = np.log1p(values[:, :, idx])  # (B, k, len(at))
-    step = times[1] - times[0] if len(times) > 1 else 1.0
-    above = values > level
-    first = np.where(above.any(axis=2), times[above.argmax(axis=2)], times[-1] + step)
-    b = len(values)
-    return np.hstack([logs.reshape(b, -1), first, np.asarray(wind, dtype=float).reshape(b, 2)])
-
-
-def leak_features(
-    readings: SensorReadings, at: Sequence[float] = DEFAULT_TIMES, level: float = ARRIVAL_LEVEL
-) -> np.ndarray:
-    """(n_features,) row for one emergency's readings."""
-    return feature_matrix(readings.times, readings.values[None], readings.wind[None], at, level)[0]
+    now = times[-1] - t_alarm
+    step = times[1] - times[0] if len(times) > 1 else 5.0
+    arrival = _first_above(times, values, ARRIVAL_LEVEL) - t_alarm
+    arrival = np.where(np.isinf(arrival), now + step, arrival)  # not yet: just after now
+    latest = np.log1p(values[:, -1])
+    return np.concatenate([latest, arrival, np.asarray(wind, dtype=float), [now]])
