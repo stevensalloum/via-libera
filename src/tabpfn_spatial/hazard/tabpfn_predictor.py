@@ -1,5 +1,7 @@
 """Probabilistic hazard forecasts from simulated training rows and source uncertainty."""
 
+import warnings
+
 import numpy as np
 
 from tabpfn_spatial.contracts import (
@@ -9,10 +11,13 @@ from tabpfn_spatial.contracts import (
     HazardMap,
     SensorReadings,
     SourceEstimate,
+    SourceLocator,
 )
 from tabpfn_spatial.core.models import Regressor, make_regressor
 from tabpfn_spatial.hazard.features import cell_features
-from tabpfn_spatial.hazard.library import training_rows
+from tabpfn_spatial.hazard.geometry import path_features
+from tabpfn_spatial.hazard.library import DEFAULT_CONTEXT_SEED, training_rows
+from tabpfn_spatial.hazard.source_selection import SourceSelection, select_source_cells
 from tabpfn_spatial.sim import Factory
 
 
@@ -31,11 +36,26 @@ def _cdf(values: np.ndarray, levels: np.ndarray, threshold: float) -> np.ndarray
 class TabPFNHazardPredictor:
     """Mix source-conditioned concentration distributions in one prediction per episode."""
 
-    def __init__(self, backend: str = "cloud", top_k: int = 3, model: Regressor | None = None):
-        """Choose the backend and maximum number of source hypotheses."""
+    def __init__(
+        self,
+        backend: str = "cloud",
+        top_k: int = 3,
+        model: Regressor | None = None,
+        *,
+        include_geometry: bool = False,
+        source_mass: float | None = None,
+        open_cells_only: bool = False,
+    ) -> None:
+        """Choose backend, source selection, optional geometry and open-cell queries."""
         if top_k < 1:
             raise ValueError("top_k must be positive")
+        if source_mass is not None and (not np.isfinite(source_mass) or not 0 < source_mass <= 1):
+            raise ValueError("source_mass must be in (0, 1]")
         self.backend, self.top_k, self.model = backend, top_k, model
+        self.include_geometry = include_geometry
+        self.source_mass = source_mass
+        self.open_cells_only = open_cells_only
+        self.last_selection: SourceSelection | None = None
 
     def fit(
         self,
@@ -43,10 +63,24 @@ class TabPFNHazardPredictor:
         n_scenarios: int = 100,
         cells_per_scenario: int = 20,
         times: np.ndarray | None = None,
-        seed: int = 42,
+        seed: int = DEFAULT_CONTEXT_SEED,
+        *,
+        source_locator: SourceLocator | None = None,
     ) -> "TabPFNHazardPredictor":
-        """Fit one regressor on simulated concentrations; generated rows stay in memory."""
-        x, y = training_rows(factory, n_scenarios, cells_per_scenario, times, seed)
+        """Fit on simulated concentrations; optionally use the live source locator.
+
+        The supplied locator must already be ready to predict for this factory.
+        A locator using cloud inference may spend credits once per training scenario.
+        """
+        x, y = training_rows(
+            factory,
+            n_scenarios,
+            cells_per_scenario,
+            times,
+            seed,
+            include_geometry=self.include_geometry,
+            locator=source_locator,
+        )
         self.model = make_regressor(self.backend).fit(x, y)
         return self
 
@@ -61,31 +95,41 @@ class TabPFNHazardPredictor:
         if self.model is None:
             raise ValueError("fit the predictor before predicting")
         times = np.asarray(times, dtype=float)
-        probs = np.asarray(source.prob, dtype=float)
-        if probs.shape != factory.walls.shape or np.any(~np.isfinite(probs)) or np.any(probs < 0):
-            raise ValueError("source probabilities must be finite, nonnegative and match the grid")
-        valid = np.where(factory.walls, 0.0, probs)
-        if valid.sum() <= 0 or not len(times):
-            raise ValueError("source needs positive open-cell probability and nonempty times")
-        indices = np.argsort(valid.ravel())[::-1][: self.top_k]
-        indices = indices[valid.ravel()[indices] > 0]
-        weights = valid.ravel()[indices]
-        weights /= weights.sum()
+        if not len(times):
+            raise ValueError("times must be nonempty")
+        self.last_selection = None
+        selection = select_source_cells(source.prob, factory.walls, self.top_k, self.source_mass)
+        self.last_selection = selection
+        if selection.target_reached is False:
+            warnings.warn(
+                f"Selected cells retained {selection.retained_mass:.1%} of source probability, "
+                f"below the requested {self.source_mass:.1%} target.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+        indices, weights = selection.indices, selection.weights
         rate = (
             1.0
             if source.rate is None or source.rate_levels is None
             else float(np.interp(0.5, source.rate_levels, source.rate))
         )
-        xy = factory.centres().reshape(-1, 2)
-        features = [
-            cell_features(factory, xy[idx], readings.wind, rate, float(t), xy)
-            for idx in indices
-            for t in times
-        ]
+        all_xy = factory.centres().reshape(-1, 2)
+        queried = (~factory.walls).ravel() if self.open_cells_only else np.ones(len(all_xy), bool)
+        xy = all_xy[queried]
+        features = []
+        for idx in indices:
+            geometry = path_features(factory, all_xy[idx], xy) if self.include_geometry else None
+            for t in times:
+                row = cell_features(factory, all_xy[idx], readings.wind, rate, float(t), xy)
+                features.append(np.column_stack([row, geometry]) if geometry is not None else row)
         dist = self.model.predict_dist(np.concatenate(features))
         toxic = 1 - _cdf(dist.values, dist.levels, TOXIC_LIMIT)
         fire = _cdf(dist.values, dist.levels, UEL) - _cdf(dist.values, dist.levels, LEL)
-        shape = (len(indices), len(times), factory.ny, factory.nx)
-        p_toxic = np.tensordot(weights, toxic.reshape(shape), axes=1) * ~factory.walls
-        p_fire = np.tensordot(weights, fire.reshape(shape), axes=1) * factory.ignition
+        shape = (len(indices), len(times), len(xy))
+        full_toxic = np.zeros((len(times), len(all_xy)))
+        full_fire = np.zeros_like(full_toxic)
+        full_toxic[:, queried] = np.tensordot(weights, toxic.reshape(shape), axes=1)
+        full_fire[:, queried] = np.tensordot(weights, fire.reshape(shape), axes=1)
+        p_toxic = full_toxic.reshape(-1, factory.ny, factory.nx) * ~factory.walls
+        p_fire = full_fire.reshape(-1, factory.ny, factory.nx) * factory.ignition
         return HazardMap(times, p_toxic, p_fire)

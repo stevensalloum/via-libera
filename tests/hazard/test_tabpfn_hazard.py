@@ -39,6 +39,65 @@ def test_training_rows_are_seeded_and_have_concentrations() -> None:
     np.testing.assert_array_equal(y, other_y)
 
 
+def test_training_uses_estimated_source_and_measured_wind_without_future_readings(monkeypatch):
+    from tabpfn_spatial.hazard import library
+
+    factory = Factory.default()
+    estimated = factory.leak_sites[0]
+    seen = []
+    actual_features = library.cell_features
+    actual_readings = library.readings
+
+    def noisy_readings(f, scenario, t_obs, rng):
+        obs = actual_readings(f, scenario, t_obs, rng)
+        return SensorReadings(obs.positions, obs.times, obs.values, np.array([0.0, 2.0]))
+
+    class Locator:
+        def locate(self, f, obs):
+            prob = np.zeros_like(f.walls, dtype=float)
+            prob[f.cell_of(estimated)] = 1.0
+            seen.append(float(obs.times[-1]))
+            return SourceEstimate(prob)
+
+    def features(f, source, wind, rate, t, cells):
+        np.testing.assert_allclose(source, estimated)
+        np.testing.assert_allclose(wind, [0.0, 2.0])
+        assert rate == 1.0
+        assert t >= seen[-1]
+        return actual_features(f, source, wind, rate, t, cells)
+
+    monkeypatch.setattr(library, "readings", noisy_readings)
+    monkeypatch.setattr(library, "cell_features", features)
+    x, _ = training_rows(factory, 4, 2, np.array([10.0, 20.0]), 1001, locator=Locator())
+    assert x.shape == (16, 7)
+    assert len(seen) == 4
+
+
+def test_default_training_covers_early_and_late_forecasts():
+    x, _ = training_rows(Factory.default(), 40, 1, seed=1001)
+    assert x[:, 3].min() <= 5.0
+    assert x[:, 3].max() >= 130.0
+
+
+def test_fit_accepts_a_source_locator_to_match_the_live_pipeline():
+    factory = Factory.default()
+
+    class Locator:
+        calls = 0
+
+        def locate(self, f, obs):
+            self.calls += 1
+            prob = np.zeros_like(f.walls, dtype=float)
+            prob[f.cell_of(f.leak_sites[0])] = 1.0
+            return SourceEstimate(prob)
+
+    locator = Locator()
+    TabPFNHazardPredictor(backend="baseline").fit(
+        factory, n_scenarios=2, cells_per_scenario=2, source_locator=locator
+    )
+    assert locator.calls == 2
+
+
 def test_predict_batches_sources_and_mixes_probabilities() -> None:
     f = Factory.default()
     prob = np.zeros_like(f.walls, dtype=float)
@@ -64,6 +123,35 @@ def test_predict_batches_sources_and_mixes_probabilities() -> None:
     assert hz.p_toxic[0, 1, 1] == pytest.approx(0.75)
     assert np.all(hz.p_toxic[:, f.walls] == 0)
     assert np.all(hz.p_fire[:, ~f.ignition] == 0)
+
+
+@pytest.mark.parametrize("include_geometry", [False, True])
+def test_open_cells_only_skips_wall_rows_and_preserves_output_contract(include_geometry) -> None:
+    f = Factory.default()
+    prob = np.zeros_like(f.walls, dtype=float)
+    prob[1, 1], prob[1, 2] = 0.6, 0.4
+    obs = SensorReadings(f.sensors, np.array([10.0]), np.zeros((len(f.sensors), 1)), np.zeros(2))
+
+    class Fake:
+        rows = 0
+
+        def predict_dist(self, x):
+            self.rows = len(x)
+            values = np.repeat(np.where(x[:, 2] < 10.0, 0.2, 0.0)[:, None], 2, axis=1)
+            return QuantileDist(np.array([0.1, 0.9]), values, values[:, 0])
+
+    times = np.array([10.0, 20.0])
+    full_model, open_model = Fake(), Fake()
+    full = TabPFNHazardPredictor(
+        model=full_model, top_k=2, include_geometry=include_geometry
+    ).predict(f, obs, SourceEstimate(prob), times)
+    compact = TabPFNHazardPredictor(
+        model=open_model, top_k=2, open_cells_only=True, include_geometry=include_geometry
+    ).predict(f, obs, SourceEstimate(prob), times)
+    assert full_model.rows == 2 * len(times) * f.ny * f.nx
+    assert open_model.rows == 2 * len(times) * np.count_nonzero(~f.walls)
+    np.testing.assert_array_equal(compact.p_toxic, full.p_toxic)
+    np.testing.assert_array_equal(compact.p_fire, full.p_fire)
 
 
 def test_offline_predictor_fit_and_predict() -> None:
