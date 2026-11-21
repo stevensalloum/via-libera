@@ -177,8 +177,13 @@ class Factory:
         cell: float = 2.0,
         n_machines: int = 6,
         n_hot: int = 3,
+        exits_per_side: int = 1,
+        sensor_spacing: float | None = None,
     ) -> "Factory":
-        """Random plant: machines, a dividing wall with two doors, 4 exits, 16 sensors, pipes.
+        """Random plant: machines, a dividing wall with two doors, exits, sensors, pipes.
+
+        ``exits_per_side`` exits on each outer wall (spread along it); sensors on a jittered
+        grid, 4 x 4 or one every ``sensor_spacing`` metres (large plants need more).
 
         Pipes run from a supply point on the outer wall to every hot machine and one other
         machine (see ``_route_pipes``). Retries until every open cell can reach an exit and
@@ -194,10 +199,13 @@ class Factory:
                 for y in (rng.uniform(2, height / 2 - 8), rng.uniform(height / 2, height - 8))
             )
             walls = _rasterise(width, height, cell, machines, wall_x, doors)
-            exits = _random_exits(rng, walls, cell, width, height)
+            exits = _random_exits(rng, walls, cell, width, height, exits_per_side)
             if exits is None or not _all_reach(walls, [_cell(e, cell, walls) for e in exits]):
                 continue
-            sensors = _snap_sensors(rng, walls, cell, width, height)
+            grid = (4, 4)
+            if sensor_spacing is not None:
+                grid = (round(height / sensor_spacing), round(width / sensor_spacing))
+            sensors = _snap_sensors(rng, walls, cell, width, height, *grid)
             network = _route_pipes(rng, walls, machines, cell)
             if network is None:
                 continue
@@ -258,8 +266,8 @@ def _cell(xy: np.ndarray, cell: float, walls: np.ndarray) -> tuple[int, int]:
     return int(np.clip(xy[1] // cell, 0, ny - 1)), int(np.clip(xy[0] // cell, 0, nx - 1))
 
 
-def _random_exits(rng, walls, cell, width, height) -> np.ndarray | None:
-    """One exit on each side of the hall, on an open boundary cell (or None)."""
+def _random_exits(rng, walls, cell, width, height, per_side: int = 1) -> np.ndarray | None:
+    """``per_side`` exits on each side, one per equal stretch of wall, on open cells (or None)."""
     ny, nx = walls.shape
     sides = [
         (lambda i: (i, 0), ny),
@@ -269,11 +277,13 @@ def _random_exits(rng, walls, cell, width, height) -> np.ndarray | None:
     ]
     exits = []
     for at, n in sides:
-        free = [at(i) for i in range(2, n - 2) if not walls[at(i)]]
-        if not free:
-            return None
-        iy, ix = free[rng.integers(len(free))]
-        exits.append([(ix + 0.5) * cell, (iy + 0.5) * cell])
+        for k in range(per_side):
+            lo, hi = 2 + k * (n - 4) // per_side, 2 + (k + 1) * (n - 4) // per_side
+            free = [at(i) for i in range(lo, hi) if not walls[at(i)]]
+            if not free:
+                return None
+            iy, ix = free[rng.integers(len(free))]
+            exits.append([(ix + 0.5) * cell, (iy + 0.5) * cell])
     return np.array(exits)
 
 

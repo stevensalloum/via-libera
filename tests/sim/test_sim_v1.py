@@ -117,3 +117,25 @@ def test_simulation_runs_on_a_random_factory() -> None:
 def test_drift_must_be_non_negative() -> None:
     with pytest.raises(ValueError):
         wind_at(_sc(drift=-0.1), np.array([1.0]))
+
+
+def test_large_random_plants_get_more_exits_and_sensors_at_a_spacing() -> None:
+    f = Factory.random(
+        np.random.default_rng(2), width=120.0, height=80.0, n_machines=10, n_hot=4,
+        exits_per_side=2, sensor_spacing=15.0,
+    )  # fmt: skip
+    assert len(f.exits) == 8
+    assert len(f.sensors) == round(80 / 15) * round(120 / 15)
+    for xy in (*f.exits, *f.sensors):
+        assert not f.walls[f.cell_of(xy)]
+    ex = [f.cell_of(e) for e in f.exits]
+    assert all(iy in (0, f.ny - 1) or ix in (0, f.nx - 1) for iy, ix in ex)
+    assert len(set(ex)) == 8
+
+
+def test_default_random_arguments_keep_old_layouts() -> None:
+    a = Factory.random(np.random.default_rng(5))
+    b = Factory.random(np.random.default_rng(5), exits_per_side=1, sensor_spacing=None)
+    np.testing.assert_array_equal(a.exits, b.exits)
+    np.testing.assert_array_equal(a.sensors, b.sensors)
+    assert len(a.exits) == 4 and len(a.sensors) == 16
