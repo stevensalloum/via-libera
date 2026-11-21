@@ -26,7 +26,8 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
           PR_TEXT: ${{ github.event.pull_request.title }} ${{ github.event.pull_request.body }}
         run: |
-          pattern='co-authored-by|generated (with|by)|noreply@anthropic\.com|🤖'
+          # Real attribution only: trailer lines, "generated with/by <tool>", the robot badge.
+          pattern='^[[:space:]]*co-authored-by:|generated (with|by) \[?(claude|codex|chatgpt|copilot|openai|anthropic)|🤖'
           if { git log --format=%B "$BASE..$HEAD"; printf '%s\n' "$PR_TEXT"; } | grep -inE "$pattern"; then
             echo "::error::Remove AI attribution lines (see AGENTS.md, Commits and PRs)."
             exit 1
