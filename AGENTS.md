@@ -21,7 +21,10 @@ Each person's agent stays inside its own folders unless the task (issue) says ot
 | Simulation and data | `src/tabpfn_spatial/data/` | `tests/data/` | TBD |
 | Models / TabPFN | `src/tabpfn_spatial/models/` | `tests/models/` | TBD |
 | Agent, visuals, demo | `src/tabpfn_spatial/demo/` | `tests/demo/` | TBD |
-| Shared (`pyproject.toml`, `uv.lock`, `requirements.txt`, `AGENTS.md`, `CLAUDE.md`, `.claude/`, `.github/`, `src/tabpfn_spatial/{__init__,env,tabpfn_check}.py`, `docs/decisions.md`) | | | Steven (integrator) |
+| Shared (`pyproject.toml`, `uv.lock`, `requirements.txt`, `AGENTS.md`, `CLAUDE.md`, `.claude/`, `.github/`, `src/tabpfn_spatial/{__init__,env,tabpfn_check}.py`, `src/tabpfn_spatial/core/`, `docs/decisions.md`) | | | Steven (integrator) |
+
+Build on `tabpfn_spatial.core` (models, distributions, grids, metrics, budget guard)
+instead of calling TabPFN directly; ask for missing pieces in your status file.
 
 Shared interfaces (anything another area imports, plus dependencies in `pyproject.toml`)
 change only through a PR the integrator reviews. Say so in the PR description.

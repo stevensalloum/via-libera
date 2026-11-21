@@ -2,6 +2,17 @@
 
 Newest first. Each entry: date, decision, why, alternatives considered.
 
+## 2026-11-21: Shared core starter
+
+- **Decision:** `tabpfn_spatial.core` gives every application one interface:
+  `make_regressor(backend)` -> `predict_dist` -> `QuantileDist`, with TabPFN cloud, TabPFN
+  local and k-NN baselines behind it; `CostGuard` quotes every cloud call; `Grid2D` makes a
+  map one call.
+- **Measured** (`spatial-example`, 200 noisy readings -> 3,600 cells): CRPS cloud 0.0134 vs
+  k-NN 0.0342 (-61 %), 7 s and one call (~10k tokens).
+- **Why:** swap backends without touching application code; baselines make every claim
+  comparable; budget mistakes fail loudly.
+
 ## 2026-11-21: TabPFN cloud API via tabpfn-client, budget-aware
 
 - **Decision:** use `tabpfn-client` (cloud, TabPFN-3.5) as the default backend; key in
