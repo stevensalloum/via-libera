@@ -155,3 +155,59 @@ def test_size_can_be_switched_off(factory: Factory) -> None:
     loc = TabPFNLocator(backend="baseline", n_train=60, ws=WS, estimate_rate=False).fit(factory)
     est = loc.locate(factory, _after_alarm(factory, int(_sites(factory, 1, 2)[0]), 2)[1])
     assert est.rate is None and est.rate_levels is None
+
+
+# ------------------------------------------------------- live: map first, size later --
+class _SlowRegressor(BaselineRegressor):
+    """Size model that takes ``delay`` seconds (stands in for a slow cloud call)."""
+
+    delay = 0.6
+
+    def predict_dist(self, X: np.ndarray) -> QuantileDist:
+        import time
+
+        time.sleep(self.delay)
+        return super().predict_dist(X)
+
+
+@pytest.fixture(scope="module")
+def live(factory: Factory) -> TabPFNLocator:
+    return TabPFNLocator(
+        backend="baseline", regressor=_SlowRegressor(), n_train=120, ws=WS, live=True
+    ).fit(factory)
+
+
+def test_live_map_does_not_wait_for_the_size(factory: Factory, live: TabPFNLocator) -> None:
+    import time
+
+    _, r = _after_alarm(factory, int(_sites(factory, 1, 21)[0]), 21, 0.0)
+    t0 = time.perf_counter()
+    est = live.locate(factory, r)
+    assert time.perf_counter() - t0 < _SlowRegressor.delay / 2
+    _valid(factory, est.prob)
+    _valid_rate(est)  # first update of an emergency: the prior size
+    np.testing.assert_allclose(est.rate, prior_rate_quantiles()[1])
+
+
+def test_live_size_arrives_by_the_next_update(factory: Factory, live: TabPFNLocator) -> None:
+    import time
+
+    site = int(_sites(factory, 1, 22)[0])
+    _, r5 = _after_alarm(factory, site, 22, 5.0)
+    keep = r5.times <= r5.times[-1] - 5.0  # the same stream, 5 s earlier
+    r0 = type(r5)(r5.positions, r5.times[keep], r5.values[:, keep], r5.wind)
+    live.locate(factory, r0)
+    time.sleep(_SlowRegressor.delay + 0.3)  # the 5 s between updates, shortened
+    est = live.locate(factory, r5)
+    assert not np.allclose(est.rate, prior_rate_quantiles()[1])  # a real estimate now
+    _valid_rate(est)
+
+
+def test_live_size_is_not_shared_between_emergencies(factory: Factory, live: TabPFNLocator) -> None:
+    import time
+
+    a, b = _sites(factory, 2, 23)
+    live.locate(factory, _after_alarm(factory, int(a), 23, 0.0)[1])
+    time.sleep(_SlowRegressor.delay + 0.3)
+    est = live.locate(factory, _after_alarm(factory, int(b), 24, 0.0)[1])  # new emergency
+    np.testing.assert_allclose(est.rate, prior_rate_quantiles()[1])
