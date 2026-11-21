@@ -6,5 +6,6 @@ Goal: a TabPFN predictor with calibrated probabilities that beats it (see docs/b
 """
 
 from tabpfn_spatial.hazard.baseline import ForwardSimPredictor, brier, hazard_from_fields
+from tabpfn_spatial.hazard.tabpfn_predictor import TabPFNHazardPredictor
 
-__all__ = ["ForwardSimPredictor", "brier", "hazard_from_fields"]
+__all__ = ["ForwardSimPredictor", "TabPFNHazardPredictor", "brier", "hazard_from_fields"]
