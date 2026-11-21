@@ -127,15 +127,16 @@ batch/repeat checks; interrupted in-flight calls and actual provider billing are
 not recorded by the stopped processes. The original three full runs were quoted
 at up to 4,480,000 credits combined; the baseline and unit tests use none.
 
-Regenerate the recorded-aggregate figure from local checkpoint files without
-cloud calls:
+Regenerate the recorded-aggregate figure without case files or cloud calls:
 
 ```bash
 uv run python tests/hazard/summarise_multiplant.py \
-  outputs/multiplant-results.jsonl outputs/multiplant-replication.jsonl \
-  outputs/multiplant-replication2.jsonl \
+  --recorded \
   --figure docs/figures/ahmad/03-multiplant-validation.png
 ```
+
+To re-summarise the local case checkpoints, pass their paths instead of
+`--recorded`. The recorded aggregates above are embedded in the plotting script.
 
 Quote before running and use `--backend cloud --run-cloud` to invoke the cloud.
 The complete run uses `tests/hazard/compare_multiplant.py --episodes 10` and

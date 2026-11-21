@@ -74,3 +74,12 @@ def test_batched_source_contexts_replay_the_same_simulated_targets():
     np.testing.assert_array_equal(y1, y2)
     assert x1.shape == x2.shape
     assert not np.array_equal(x1, x2)
+
+
+def test_recorded_figure_can_be_redrawn_without_case_data(tmp_path):
+    script = Path(__file__).with_name("summarise_multiplant.py")
+    harness = runpy.run_path(str(script))
+    output = tmp_path / "recorded.png"
+    harness["make_recorded_figure"](output)
+    assert output.is_file()
+    assert output.stat().st_size > 0

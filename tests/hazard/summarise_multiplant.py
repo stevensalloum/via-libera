@@ -25,6 +25,17 @@ METHODS = (
     ("rayan_context", "TabPFN: Rayan context", "#da8023"),
 )
 
+# Recorded condition aggregates, in CONDITIONS order. These are summary
+# statistics for redrawing the published figure, not the simulated case data.
+RECORDED = (
+    (28, (0.0271871131, 0.0582493883, 0.0362785791), (0.8989855846, 0.5642285104, 0.7195942338)),
+    (25, (0.0410684476, 0.0598811571, 0.0407986737), (0.8492053560, 0.5662620448, 0.7095482418)),
+    (25, (0.0466447142, 0.0601433956, 0.0415089293), (0.8117160060, 0.5229553437, 0.6705970898)),
+    (19, (0.0331963457, 0.0535891598, 0.0375499130), (0.8717855189, 0.5785154113, 0.6791902243)),
+    (10, (0.0320000000, 0.0449186446, 0.0274450426), (0.8810013717, 0.7630315501, 0.8779149520)),
+    (10, (0.0491650485, 0.0500068348, 0.0367742999), (0.7739492616, 0.6717152594, 0.7440363499)),
+)
+
 
 def interval(difference):
     """Exploratory paired percentile interval over episodes at fixed layouts."""
@@ -66,8 +77,24 @@ def make_figure(rows, output):
     if any(not group for group in groups):
         raise ValueError("the figure requires at least one case in every condition")
     summaries = [aggregate(group) for group in groups]
+    draw_figure(summaries, len({r["layout"] for r in rows}), output)
+
+
+def make_recorded_figure(output):
+    """Redraw the committed figure from the documented summary statistics."""
+    summaries = []
+    for count, briers, recalls in RECORDED:
+        row = {"n": count}
+        for (name, _, _), brier, recall in zip(METHODS, briers, recalls, strict=True):
+            row[name] = {"brier": brier, "recall": recall}
+        summaries.append(row)
+    draw_figure(summaries, 2, output)
+
+
+def draw_figure(summaries, n_layouts, output):
+    """Draw mean Brier and pooled recall for each recorded condition."""
     fig, axes = plt.subplots(2, 1, figsize=(13.5, 8.5), sharex=True)
-    x = np.arange(len(groups))
+    x = np.arange(len(summaries))
     width = 0.25
     for i, (name, label, color) in enumerate(METHODS):
         offset = (i - 1) * width
@@ -81,7 +108,7 @@ def make_figure(rows, output):
     axes[1].set_ylabel("Toxic recall at 0.5\n(higher is better)")
     axes[1].set_xticks(
         x,
-        [f"{title}\nn={len(group)}" for (_, title), group in zip(CONDITIONS, groups, strict=True)],
+        [f"{title}\nn={s['n']}" for (_, title), s in zip(CONDITIONS, summaries, strict=True)],
     )
     axes[1].set_ylim(0, 1)
     for ax in axes:
@@ -89,12 +116,11 @@ def make_figure(rows, output):
         ax.set_axisbelow(True)
         ax.spines[["top", "right"]].set_visible(False)
     axes[0].legend(ncol=3, loc="upper center", bbox_to_anchor=(0.5, 1.16), fontsize=9)
-    n_layouts = len({r["layout"] for r in rows})
     fig.suptitle("Paired hazard forecasts under simulated changes", fontsize=17)
     fig.text(
         0.03,
         0.015,
-        f"{len(rows)} case variations · {n_layouts} layouts, uneven groups · "
+        f"{sum(s['n'] for s in summaries)} case variations · {n_layouts} layouts, uneven groups · "
         "same simulator for context and testing · correlated cells/times",
         fontsize=9,
     )
@@ -107,9 +133,17 @@ def make_figure(rows, output):
 def main():
     """Print a deterministic summary and optionally save a figure."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input", type=Path, nargs="+")
+    parser.add_argument("input", type=Path, nargs="*")
     parser.add_argument("--figure", type=Path)
+    parser.add_argument("--recorded", action="store_true", help="draw the recorded aggregates")
     args = parser.parse_args()
+    if args.recorded:
+        if args.input or not args.figure:
+            parser.error("--recorded requires --figure and no input files")
+        make_recorded_figure(args.figure)
+        return
+    if not args.input:
+        parser.error("provide input files or --recorded with --figure")
     rows = [
         json.loads(line) for path in args.input for line in path.read_text().splitlines() if line
     ]

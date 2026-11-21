@@ -71,12 +71,11 @@ results use simulated data only and do not establish a general winner.
 
 ![Partial multi-layout validation](../figures/ahmad/03-multiplant-validation.png)
 
-Reproduce the figure without model calls from the local checkpoint files:
+Reproduce the figure from the recorded aggregates without model calls:
 
 ```bash
 uv run python tests/hazard/summarise_multiplant.py \
-  outputs/multiplant-results.jsonl outputs/multiplant-replication.jsonl \
-  outputs/multiplant-replication2.jsonl \
+  --recorded \
   --figure docs/figures/ahmad/03-multiplant-validation.png
 ```
 
