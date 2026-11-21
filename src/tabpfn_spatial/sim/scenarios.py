@@ -10,13 +10,16 @@ from tabpfn_spatial.sim.plume import Scenario, simulate, wind_at
 def sample_scenarios(
     factory: Factory, n: int, rng: np.random.Generator, drift: float = 0.0
 ) -> list[Scenario]:
-    """Leaks at random machine-adjacent cells; rate log-uniform 0.5-2; wind 0.2-1.5 m/s.
+    """Leaks on the pipes (fittings likelier); rate log-uniform 0.5-2; wind 0.2-1.5 m/s.
+
+    Sites are drawn from ``factory.leak_sites`` with probability ``leak_weights``.
 
     ``drift`` > 0 makes the wind direction wander (see ``Scenario``); each leak gets its own
     seed from ``rng``, so a fixed ``rng`` seed reproduces the whole set.
     """
     sites = factory.leak_sites
-    picks = sites[rng.integers(len(sites), size=n)]
+    w = factory.leak_weights
+    picks = sites[rng.choice(len(sites), size=n, p=w / w.sum())]
     rates = np.exp(rng.uniform(np.log(0.5), np.log(2.0), size=n))
     speed = rng.uniform(0.2, 1.5, size=n)
     angle = rng.uniform(0, 2 * np.pi, size=n)

@@ -1,7 +1,7 @@
 """Pictures of the simulator, to check it by eye: ``uv run sim-viz``.
 
-- ``plot_layout``: the plant (machines, hot ones, wall and doors, exits, sensors, leak sites,
-  ignition zones).
+- ``plot_layout``: the plant (machines, hot ones, wall and doors, exits, sensors, gas pipes
+  and fittings, leak prior, ignition zones).
 - ``plot_timelapse``: gas concentration over time for one or more leaks, with the toxic and
   flammable contours and the wind arrow at each moment.
 - ``plot_readings``: what each sensor measured (dead sensors listed).
@@ -77,8 +77,22 @@ def _draw_plant(ax, f: Factory, labels: bool = True) -> None:
     ax.set_aspect("equal")
 
 
+def draw_pipes(ax, f: Factory) -> None:
+    """Gas pipes as dark lines between neighbouring pipe cells; fittings as dots."""
+    if f.pipes is None or f.fittings is None:
+        return
+    for iy, ix in np.argwhere(f.pipes):
+        for dy, dx in ((0, 1), (1, 0)):
+            ny_, nx_ = iy + dy, ix + dx
+            if ny_ < f.ny and nx_ < f.nx and f.pipes[ny_, nx_]:
+                a, b = f.centre(iy, ix), f.centre(ny_, nx_)
+                ax.plot([a[0], b[0]], [a[1], b[1]], c="#5d2e8c", lw=2.2, zorder=3)
+    fit = np.array([f.centre(iy, ix) for iy, ix in np.argwhere(f.fittings)])
+    ax.scatter(*fit.T, s=30, c="#5d2e8c", edgecolors="white", lw=0.8, zorder=4)
+
+
 def plot_layout(f: Factory, path: Path) -> Path:
-    """The plant with leak sites (small dots) and ignition zones (orange tint)."""
+    """The plant with gas pipes, leak prior (dot size) and ignition zones (orange tint)."""
     plt = _plt()
     fig, ax = plt.subplots(figsize=(10, 7))
     ign = np.ma.masked_where(~f.ignition, f.ignition)
@@ -91,12 +105,17 @@ def plot_layout(f: Factory, path: Path) -> Path:
         vmax=3,
         alpha=0.6,
     )
-    ax.scatter(*f.leak_sites.T, s=6, c="purple", alpha=0.5, label="possible leak sites")
+    w = f.leak_weights
+    ax.scatter(
+        *f.leak_sites.T, s=8 * w, c="purple", alpha=0.35, label="leak sites (size = likelihood)"
+    )
     _draw_plant(ax, f)
+    draw_pipes(ax, f)
+    ax.plot([], [], c="#5d2e8c", lw=2.2, marker="o", label="gas pipe, dot = fitting")
     ax.set_title(
         f"Factory {f.width:.0f} m x {f.height:.0f} m, {f.cell:.0f} m cells: grey = solid, "
-        "orange box = hot machine, orange tint = ignition zone, "
-        "diamonds = exits, squares = sensors",
+        "orange box = hot machine, orange tint = ignition zone,\n"
+        "diamonds = exits, squares = sensors, purple = gas pipes (leaks start only there)",
         fontsize=9,
     )
     ax.legend(loc="upper right", fontsize=8)
@@ -172,7 +191,9 @@ def plot_random_layouts(seeds: list[int], path: Path) -> Path:
     plt = _plt()
     fig, axes = plt.subplots(1, len(seeds), figsize=(4.6 * len(seeds), 3.4), squeeze=False)
     for ax, s in zip(axes[0], seeds, strict=True):
-        _draw_plant(ax, Factory.random(np.random.default_rng(s)), labels=False)
+        rf = Factory.random(np.random.default_rng(s))
+        _draw_plant(ax, rf, labels=False)
+        draw_pipes(ax, rf)
         ax.set_title(f"Factory.random(seed={s})", fontsize=9)
     return _save(fig, path)
 
