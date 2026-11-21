@@ -103,8 +103,15 @@ def _side(f: Factory, xy: np.ndarray) -> str:
     return min(d, key=d.get)
 
 
-def scene(f: Factory) -> dict:
-    """Everything the viewer needs, JSON-ready. O(ny * nx)."""
+def scene(f: Factory, people: int = 0, seed: int = 0) -> dict:
+    """Everything the viewer needs, JSON-ready. O(ny * nx).
+
+    ``people``: workers placed with ``evac.crowd.sample_workers`` (seeded), the same way
+    the crowd simulator places them.
+    """
+    from tabpfn_spatial.evac.crowd import sample_workers
+
+    crowd = sample_workers(f, people, np.random.default_rng(seed)) if people else np.zeros((0, 2))
     cells = lambda mask: [f.centre(int(iy), int(ix)).tolist() for iy, ix in np.argwhere(mask)]  # noqa: E731
     return {
         "width": f.width,
@@ -130,4 +137,5 @@ def scene(f: Factory) -> dict:
         "ignition": cells(f.ignition),
         "sensors": f.sensors.tolist(),
         "exits": [{"xy": e.tolist(), "side": _side(f, e)} for e in f.exits],
+        "people": crowd.tolist(),
     }

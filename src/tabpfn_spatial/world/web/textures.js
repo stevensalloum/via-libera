@@ -148,3 +148,97 @@ export function hazardStripes() {
   }
   return toTexture(c);
 }
+
+// Hazard decals: GHS-style red diamond with a flame, yellow triangle "hot surface".
+export function ghsFlame() {
+  const [c, g] = canvas(256, 256);
+  g.translate(128, 128);
+  g.rotate(Math.PI / 4);
+  g.fillStyle = "white";
+  g.fillRect(-82, -82, 164, 164);
+  g.strokeStyle = "#d41e1e";
+  g.lineWidth = 16;
+  g.strokeRect(-82, -82, 164, 164);
+  g.rotate(-Math.PI / 4);
+  g.fillStyle = "#111";
+  g.beginPath();  // a stylised flame
+  g.moveTo(0, -62);
+  g.bezierCurveTo(34, -20, 40, 10, 26, 40);
+  g.lineTo(-26, 40);
+  g.bezierCurveTo(-42, 10, -20, -14, -6, -24);
+  g.bezierCurveTo(-4, -8, 4, -4, 0, -62);
+  g.fill();
+  g.fillRect(-40, 44, 80, 10);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+export function hotSurface() {
+  const [c, g] = canvas(256, 230);
+  g.fillStyle = "#f5c400";
+  g.strokeStyle = "#111";
+  g.lineWidth = 14;
+  g.beginPath();
+  g.moveTo(128, 12); g.lineTo(246, 218); g.lineTo(10, 218); g.closePath();
+  g.fill(); g.stroke();
+  g.lineWidth = 9;
+  for (const x of [96, 128, 160]) {  // heat waves
+    g.beginPath();
+    g.moveTo(x, 190);
+    g.bezierCurveTo(x - 14, 160, x + 14, 140, x, 100);
+    g.stroke();
+  }
+  g.fillRect(70, 196, 116, 10);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+export function screenTexture(title) {
+  const [c, g] = canvas(256, 160);
+  g.fillStyle = "#071a2b";
+  g.fillRect(0, 0, 256, 160);
+  g.fillStyle = "#38c8ff";
+  g.font = "bold 18px Helvetica, Arial";
+  g.fillText(title.toUpperCase().slice(0, 18), 12, 26);
+  g.strokeStyle = "#2ee87a";
+  g.lineWidth = 3;
+  g.beginPath();
+  for (let x = 0; x <= 232; x += 8) g.lineTo(12 + x, 110 - 30 * Math.sin(x / 19) - 10 * Math.sin(x / 5));
+  g.stroke();
+  g.fillStyle = "#2ee87a";
+  g.fillRect(12, 130, 70, 14);
+  g.fillStyle = "#ffb020";
+  g.fillRect(92, 130, 40, 14);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+export function textPlate(text, bg = "#1d2733", fg = "#ffffff", w = 512, h = 128, font = 64) {
+  const [c, g] = canvas(w, h);
+  g.fillStyle = bg;
+  g.fillRect(0, 0, w, h);
+  g.fillStyle = fg;
+  g.font = `bold ${font}px Helvetica, Arial, sans-serif`;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillText(text, w / 2, h / 2 + 2);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+export function rollerDoorTexture() {
+  const [c, g] = canvas(128, 256);
+  g.fillStyle = "#7c8691";
+  g.fillRect(0, 0, 128, 256);
+  for (let y = 0; y < 256; y += 10) {
+    g.fillStyle = "rgba(255,255,255,0.18)";
+    g.fillRect(0, y, 128, 3);
+    g.fillStyle = "rgba(0,0,0,0.25)";
+    g.fillRect(0, y + 7, 128, 2);
+  }
+  return toTexture(c);
+}

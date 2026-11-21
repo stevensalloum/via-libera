@@ -1,6 +1,13 @@
 // 3D factory world: loads data/scene.json (exported by `uv run world`) and builds it.
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { Sky } from "three/addons/objects/Sky.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { SMAAPass } from "three/addons/postprocessing/SMAAPass.js";
+import { animateDetails } from "./details.js";
 import { CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer.js";
 import { Navigator } from "./controls.js";
 import { animateMachines } from "./machines.js";
@@ -14,7 +21,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+renderer.toneMappingExposure = 0.75;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 app.appendChild(renderer.domElement);
@@ -24,16 +31,23 @@ labelRenderer.domElement.className = "labels";
 app.appendChild(labelRenderer.domElement);
 
 const world3d = new THREE.Scene();
-const sky = new THREE.Color("#c8d5e0");
-world3d.background = sky;
 const span = Math.max(scene.width, scene.height);
-world3d.fog = new THREE.Fog(sky, span * 2, span * 6);
+const sunDir = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(55), THREE.MathUtils.degToRad(-140));
+const sky = new Sky();  // physical sky (Preetham) with the same sun as the shadows
+sky.scale.setScalar(5000);
+sky.material.uniforms.turbidity.value = 5;
+sky.material.uniforms.rayleigh.value = 1.2;
+sky.material.uniforms.mieCoefficient.value = 0.004;
+sky.material.uniforms.mieDirectionalG.value = 0.8;
+sky.material.uniforms.sunPosition.value.copy(sunDir);
+world3d.add(sky);
+world3d.fog = new THREE.Fog("#c9d8e6", span * 3, span * 9);
 const pmrem = new THREE.PMREMGenerator(renderer);
 world3d.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
 world3d.add(new THREE.HemisphereLight("#eef4ff", "#5a5650", 0.55));
 const sun = new THREE.DirectionalLight("#fff1dc", 2.4);
-sun.position.set(-span * 0.6, span * 1.1, span * 0.5);
+sun.position.copy(sunDir).multiplyScalar(span * 1.5);
 sun.castShadow = true;
 sun.shadow.mapSize.set(4096, 4096);
 const sc = sun.shadow.camera;
@@ -48,7 +62,18 @@ world3d.add(sun);
 const { root, parts, F } = buildWorld(scene);
 world3d.add(root);
 
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, span * 10);
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 12000);
+
+// Ambient occlusion and anti-aliasing (toggle "High quality" off on slow machines).
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(world3d, camera));
+const gtao = new GTAOPass(world3d, camera, innerWidth, innerHeight);
+gtao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1.5, scale: 1.0 });
+gtao.blendIntensity = 0.85;
+composer.addPass(gtao);
+composer.addPass(new OutputPass());
+composer.addPass(new SMAAPass(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio()));
+let highQuality = true;
 const nav = new Navigator(camera, renderer.domElement, scene, F);
 const VIEWS = {
   overview: () => [F.P(-scene.width * 0.15, -scene.height * 0.55, span * 0.55), F.P(scene.width / 2, scene.height / 2, 0)],
@@ -64,7 +89,8 @@ const $ = (id) => document.getElementById(id);
 $("info").innerHTML =
   `${scene.width} x ${scene.height} m &middot; ${scene.machines.length} machines ` +
   `(${scene.machines.filter((m) => m.hot).length} hot) &middot; ${scene.sensors.length} gas sensors &middot; ` +
-  `${scene.exits.length} exits &middot; ${scene.leak_sites.length} leak sites on the gas pipes`;
+  `${scene.exits.length} exits &middot; ${scene.leak_sites.length} leak sites on the gas pipes &middot; ` +
+  `${scene.people.length} workers`;
 for (const [id, fn] of Object.entries(VIEWS)) $(`view-${id}`).onclick = () => nav.flyTo(...fn());
 const goto = $("goto");
 scene.machines.forEach((m, i) => goto.add(new Option(`${m.name}${m.hot ? " (hot)" : ""}`, `m${i}`)));
@@ -93,6 +119,9 @@ function cullLabels() {  // near the floor, only nearby labels (they would show 
   }
 }
 layer("show-grid", (on) => { parts.grid.visible = on; });
+layer("show-overhead", (on) => { parts.overhead.visible = on; });
+layer("show-people", (on) => { parts.people.visible = on; });
+layer("high-quality", (on) => { highQuality = on; });
 layer("show-pipes", (on) => { parts.pipes.visible = on; });
 
 $("walk").onclick = () => {
@@ -162,14 +191,16 @@ addEventListener("resize", () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   labelRenderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
 });
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.1);
   nav.update(dt);
   animateMachines(parts.machines, clock.elapsedTime);
+  animateDetails(parts.overhead, clock.elapsedTime);
   cullLabels();
-  renderer.render(world3d, camera);
+  if (highQuality) composer.render(); else renderer.render(world3d, camera);
   labelRenderer.render(world3d, camera);
   drawMinimap();
 });

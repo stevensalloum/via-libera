@@ -21,11 +21,11 @@ from tabpfn_spatial.world.export import scene
 WEB = Path(__file__).parent / "web"
 
 
-def write_scene(f: Factory, out: Path) -> Path:
+def write_scene(f: Factory, out: Path, people: int = 0, seed: int = 0) -> Path:
     """Write ``scene.json`` for the viewer into ``out``."""
     out.mkdir(parents=True, exist_ok=True)
     path = out / "scene.json"
-    path.write_text(json.dumps(scene(f)))
+    path.write_text(json.dumps(scene(f, people, seed)))
     return path
 
 
@@ -61,6 +61,7 @@ def main() -> int:
     p.add_argument("--plant", choices=("default", "random"), default="default")
     p.add_argument("--seed", type=int, default=3, help="random plant seed")
     p.add_argument("--port", type=int, default=8770)
+    p.add_argument("--people", type=int, default=80, help="workers in the hall")
     p.add_argument("--out", type=Path, default=Path("outputs/world"))
     p.add_argument("--no-open", action="store_true", help="do not open a browser")
     a = p.parse_args()
@@ -69,7 +70,7 @@ def main() -> int:
         rng = np.random.default_rng(a.seed)
         f = Factory.random(rng, width=120.0, height=80.0, n_machines=10, n_hot=4,
                            exits_per_side=2, sensor_spacing=15.0)  # fmt: skip
-    print("scene:", write_scene(f, a.out))
+    print("scene:", write_scene(f, a.out, a.people, a.seed))
     server = make_server(a.out, a.port)
     url = f"http://127.0.0.1:{server.server_address[1]}/"
     print("3D world:", url, "(Ctrl+C to stop)")

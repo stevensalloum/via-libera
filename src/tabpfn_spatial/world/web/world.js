@@ -2,13 +2,17 @@
 // factory: machine footprints, inner wall cells, outer walls with exit gaps.
 import * as THREE from "three";
 import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
+import { envelope, exterior, interior, people } from "./details.js";
+import { tube } from "./geom.js";
 import { buildMachine } from "./machines.js";
 import { blockTexture, corrugatedTexture, floorTexture, signTexture } from "./textures.js";
 
+export { tube };
 export const DOOR_W = 2.4;  // m, clear width of an exit door opening
 const DOOR_H = 3.2;
 const WALL_T = 0.4;
 const PLINTH = 1.2;
+const WIN0 = 5.6, WIN1 = 7.0;  // window band
 
 export function makeFrame(scene) {
   const W = scene.width, H = scene.height;
@@ -24,14 +28,6 @@ function label(text, cls) {
   return new CSS2DObject(el);
 }
 
-function tube(a, b, r, mat, seg = 16) {
-  const dir = new THREE.Vector3().subVectors(b, a);
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, dir.length(), seg), mat);
-  m.position.copy(a).addScaledVector(dir, 0.5);
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
-  return m;
-}
-
 function shadows(obj, cast = true) {
   obj.traverse((o) => { if (o.isMesh) { o.castShadow = cast; o.receiveShadow = true; } });
   return obj;
@@ -45,13 +41,6 @@ function floor(scene, F) {
   );
   slab.receiveShadow = true;
   g.add(slab);
-  const yard = new THREE.Mesh(
-    new THREE.PlaneGeometry(F.W + 120, F.H + 120).rotateX(-Math.PI / 2),
-    new THREE.MeshStandardMaterial({ color: "#4a4d50", roughness: 1 }),
-  );
-  yard.position.y = -0.03;
-  yard.receiveShadow = true;
-  g.add(yard);
   return g;
 }
 
@@ -61,6 +50,8 @@ function outerWalls(scene, F) {
   const clad = new THREE.MeshStandardMaterial({ map: corrugatedTexture(), metalness: 0.45, roughness: 0.45, side: THREE.DoubleSide });
   const frameMat = new THREE.MeshStandardMaterial({ color: "#13803c", metalness: 0.4, roughness: 0.5 });
   const sign = new THREE.MeshStandardMaterial({ map: signTexture("EXIT"), emissive: "#ffffff", emissiveMap: signTexture("EXIT"), emissiveIntensity: 0.9 });
+  const glass = new THREE.MeshStandardMaterial({ color: "#9cc2d8", metalness: 0.2, roughness: 0.05, transparent: true, opacity: 0.38, depthWrite: false });
+  const frameMetal = new THREE.MeshStandardMaterial({ color: "#3d444c", metalness: 0.6, roughness: 0.4 });
   const plinth = new THREE.Group(), cladding = new THREE.Group(), doors = new THREE.Group();
   const hall = scene.hall_height;
   const sides = {
@@ -86,9 +77,12 @@ function outerWalls(scene, F) {
       m.position.copy(F.P(x, y, (y0 + y1) / 2));
       group.add(shadows(m));
     };
-    for (const [a, b] of pieces) { addBox(plinth, a, b, 0, PLINTH, concrete); addBox(cladding, a, b, PLINTH, hall, clad); }
+    for (const [a, b] of pieces) { addBox(plinth, a, b, 0, PLINTH, concrete); addBox(cladding, a, b, PLINTH, WIN0, clad); }
+    addBox(cladding, -WALL_T, S.len + WALL_T, WIN1, hall, clad);
+    addBox(cladding, -WALL_T, S.len + WALL_T, WIN0, WIN1, glass);
+    for (let s = 0; s <= S.len; s += 1.5) addBox(cladding, s - 0.04, s + 0.04, WIN0, WIN1, frameMetal);
     for (const gp of gaps) {  // lintel over the door, green frame, lit EXIT sign inside
-      addBox(cladding, gp - DOOR_W / 2, gp + DOOR_W / 2, DOOR_H, hall, clad);
+      addBox(cladding, gp - DOOR_W / 2, gp + DOOR_W / 2, DOOR_H, WIN0, clad);
       for (const s of [gp - DOOR_W / 2, gp + DOOR_W / 2]) {
         const [x, y] = S.at(s, 0);
         const post = new THREE.Mesh(new THREE.BoxGeometry(0.16, DOOR_H, 0.16), frameMat);
@@ -113,7 +107,7 @@ function outerWalls(scene, F) {
 function roofFrame(scene, F) {
   const steel = new THREE.MeshStandardMaterial({ color: "#5f6670", metalness: 0.6, roughness: 0.45 });
   const lampMat = new THREE.MeshStandardMaterial({ color: "#fff8e8", emissive: "#fff4dc", emissiveIntensity: 2.5 });
-  const frame = new THREE.Group(), panels = new THREE.Group();
+  const frame = new THREE.Group();
   const hall = scene.hall_height, rise = Math.min(2.5, F.H * 0.06);
   const ridge = (y) => hall + rise * (1 - Math.abs(y - F.H / 2) / (F.H / 2));
   const xs = [];
@@ -137,15 +131,8 @@ function roofFrame(scene, F) {
       frame.add(bulb);
     }
   }
-  const glass = new THREE.MeshStandardMaterial({ color: "#d6e4ee", transparent: true, opacity: 0.18, side: THREE.DoubleSide, roughness: 0.2, depthWrite: false });
-  for (const [y0, y1] of [[0, F.H / 2], [F.H / 2, F.H]]) {  // two pitched panels as quads
-    const pts = [[0, y0], [F.W, y0], [F.W, y1], [0, y1]].map(([x, y]) => F.P(x, y, ridge(y)));
-    const geo = new THREE.BufferGeometry().setFromPoints([pts[0], pts[1], pts[2], pts[0], pts[2], pts[3]]);
-    geo.computeVertexNormals();
-    panels.add(new THREE.Mesh(geo, glass));
-  }
   frame.traverse((o) => { if (o.isMesh) o.castShadow = false; });
-  return { frame, panels };
+  return { frame };
 }
 
 function innerWalls(scene, F) {
@@ -266,6 +253,10 @@ export function buildWorld(scene) {
     floor: floor(scene, F),
     outer: outerWalls(scene, F),
     roof: roofFrame(scene, F),
+    shell: envelope(scene, F),
+    overhead: interior(scene, F),
+    yard: exterior(scene, F),
+    people: people(scene, F),
     inner: innerWalls(scene, F),
     machines: new THREE.Group(),
     pipes: pipes(scene, F),
@@ -285,10 +276,12 @@ export function buildWorld(scene) {
     l.position.copy(F.P(...e.xy, 4.2));
     labels.add(l);
   });
+  parts.outer.cladding.add(parts.shell.walls);
+  parts.roof.panels = parts.shell.roof;
   parts.grid.visible = false;
   parts.roof.panels.visible = false;
-  root.add(parts.floor, parts.outer.plinth, parts.outer.cladding, parts.outer.doors,
-    parts.roof.frame, parts.roof.panels, parts.inner, parts.machines, parts.pipes,
-    parts.sensors, parts.grid, labels);
+  root.add(parts.floor, parts.yard, parts.outer.plinth, parts.outer.cladding, parts.outer.doors,
+    parts.roof.frame, parts.roof.panels, parts.overhead, parts.inner, parts.machines, parts.pipes,
+    parts.sensors, parts.people, parts.grid, labels);
   return { root, parts, F };
 }
