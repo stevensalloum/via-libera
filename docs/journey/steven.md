@@ -223,3 +223,106 @@ What we learned:
 tests pick leak sites by fixed index and fail with 24 pipe sites; they all pass on
 `Factory.default(pipes=False)`. This is a heads-up for their next push, not a merge
 blocker: their branches are still in progress.
+
+## 2026-11-21 · Crowds: who goes to which exit when everyone leaves at once
+
+**What changed and why.** Until now one person was evacuated at a time, as if they were
+alone in the hall. Real evacuations are crowds: an exit door passes about 1.3 people per
+second per metre of width, and on big sites people walk for minutes. New pieces:
+
+- **`evac.crowd`: a crowd simulator.** People move cell to cell.
+  - Walking slows with density (Weidmann's speed-density curve).
+  - Each cell and each exit door passes at most 1.3 people per metre of width per second.
+  - A cell holds at most 90 % of jam density.
+  - Queues are first come, first served.
+  - Each person's dose, seconds in harm and seconds queueing are counted on the true gas.
+- **`evac.fields`: exit fields.** One reverse search per exit gives every cell its cost
+  and path to that exit (length + risk x danger). Planning costs the same for 50 or
+  5,000 people.
+- **Three crowd planners** (`evac.crowd_plan`):
+  - **nearest:** the conventional plan;
+  - **risk:** today's risk-aware routing, each person on their own;
+  - **ccrp:** capacity-aware risk routing in the spirit of CCRP (Lu, George & Shekhar
+    2005). People book exit doors earliest-arrival first, so queues are part of the cost.
+- **Scenario ladder** (`uv run evac-crowd`), from simple to hard:
+
+  | Rung | Plant | People | Exits | Doors |
+  |---|---|---|---|---|
+  | A | 60x40 m | 50 | 4 | 1 m |
+  | B | 60x40 m | 300 | 4 | 1 m |
+  | C | 60x40 m | 300 | 4 | 0.8 m |
+  | D | random 120x80 m (40 sensors) | 600 | 8 | 1 m |
+  | E | random 200x120 m (104 sensors) | 1,200 | 8 | 1 m |
+
+  Workers stand mostly near machines. The detector alarm starts everything, and plans are
+  redone every 15-20 s. Every planner sees the same leak, alarm, maps and people.
+- **Watch it:** `uv run evac-crowd-live --rung D --seed 509` (window, `--gif`, `--still`).
+- **Bigger random plants:** `Factory.random` now takes `exits_per_side` and
+  `sensor_spacing`.
+
+![crowd ladder](../figures/steven/05-crowd-ladder.png)
+
+Figure: `uv run evac-crowd --leaks 50 --first-seed 500 --workers 10` (held-out leak seeds
+500-549, about 5 min on 10 cores), copied from `outputs/crowd/ladder.png`.
+
+![crowd run](../figures/steven/06-crowd-run.png)
+
+Figure: `uv run evac-crowd-live --rung D --seed 509 --still docs/figures/steven/06-crowd-run.png --at 60`.
+On this leak the nearest-exit crowd queues at the bottom exit, inside the gas (magenta).
+
+| Plan | People exposed | Harm-s per person | 95 % out after |
+|---|---|---|---|
+| Nearest exit | 30 % | 25 | 166 s |
+| Risk only | 1.8 % | 0.1 | 146 s |
+| Capacity-aware (ccrp) | 1.8 % | 0.1 | 94 s |
+
+![large plants](../figures/steven/07-large-plants.png)
+
+**Numbers** (50 held-out leaks per rung; harm-s = seconds in toxic or flammable gas per
+person; 95 % out = seconds since the leak):
+
+| Rung | Models | Nearest: harm-s / exposed / 95 % out | Risk only | Capacity-aware |
+|---|---|---|---|---|
+| A, 50 people | perfect | 1.24 / 10.4 % / 32 s | 0.68 / 4.3 % / 40 s | 0.69 / 4.5 % / 41 s |
+| B, 300 people | perfect | 4.97 / 15.1 % / 97 s | 1.04 / 5.0 % / 117 s | 1.03 / 5.2 % / 100 s |
+| D, 120x80 m, 600 | perfect | 2.94 / 8.8 % / 160 s | 0.13 / 1.8 % / 151 s | 0.14 / 1.8 % / **93 s** |
+| E, 200x120 m, 1,200 | perfect | 1.17 / 2.9 % / 266 s | 0.08 / 0.9 % / 267 s | 0.07 / 0.8 % / **181 s** |
+| B, 300 people | baseline | 4.97 / 15.1 % / 97 s | 1.58 / 8.7 % / 119 s | 1.90 / 9.5 % / 96 s |
+| D, 120x80 m, 600 | baseline | 2.94 / 8.8 % / 160 s | 0.76 / 4.6 % / 148 s | 0.66 / 5.1 % / 93 s |
+| E, 200x120 m, 1,200 | baseline | 1.17 / 2.9 % / 266 s | 0.48 / 2.4 % / 266 s | 1.03 / 4.5 % / 184 s |
+
+Narrow doors (C) look like B with about 5 % more harm and queueing.
+
+What we learned:
+
+1. **Gas-aware routing is the big win.** With good maps it cuts seconds in gas by 45 %
+   (50 people) to 95 % (big plants) against the nearest exit.
+2. **Capacity awareness is what makes big plants fast.** With good maps it is as safe as
+   risk-only routing and gets 95 % out 38 % sooner on D (93 vs 151 s) and 32 % sooner on
+   E (181 vs 267 s), with half the queueing or less. Risk-only routing piles everyone onto
+   the safe exits and is the slowest plan of all.
+3. **With today's baseline maps, there is no free lunch.** Capacity-aware routing sends
+   some people on longer walks, and longer walks cross gas that a wrong map missed. On the
+   biggest plant it exposed more people than the nearest exit (4.5 % vs 2.9 %), though with
+   less harm per person. Risk-only routing is the safest there but the slowest.
+   **The planner's choice depends on how good the hazard map is.** A calibrated
+   probabilistic map (TabPFN) is what turns capacity-aware routing into a pure win.
+4. **About 1 leak in 50 never trips a detector** at 10 % LEL, on our hall and on the big
+   plants alike (sensors every 15 m), so nobody is told to move. Sensor placement and
+   coverage need their own study (step 3).
+
+**What did not work.**
+- **Plain CCRP with bad maps.** On the tuning seeds 0-49 with baseline maps, it exposed
+  10.8 % of people on the biggest plant against 2.9 % for the nearest exit: it sent them
+  on long detours through gas the map missed. I tried two fixes on seeds 0-19:
+  - only divert when the queue saving is big: helped a little;
+  - count extra walking double: helped a lot and kept the perfect-map results.
+
+  The second is now the default (`DETOUR_WEIGHT = 2`). It was chosen on seeds 0-19 and the
+  table above uses untouched seeds 500-549. On those seeds, plain CCRP still gives
+  2.69 harm-s and 10.8 % exposed on E with baseline maps
+  (`uv run evac-crowd --detour 1 --rungs B D E`).
+- **My first exit-queue metric** saturated at the cell capacity and said nothing. It is
+  replaced by seconds queueing per person.
+- **A door-flow bug:** the first crowd simulator let 1.0 person/s through a 1.3 person/s
+  door, because I capped the flow budget the wrong way. The door test caught it.
