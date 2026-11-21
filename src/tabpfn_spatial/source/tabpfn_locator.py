@@ -14,7 +14,7 @@ Cost: fit = one simulation of ``n_train`` leaks + upload; ``locate_many`` = one
 """
 
 from collections.abc import Sequence
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 
 import numpy as np
 
@@ -58,17 +58,23 @@ class TabPFNLocator:
         estimate_rate: bool = True,
         classifier: Classifier | None = None,
         regressor: Regressor | None = None,
+        live: bool = False,
     ) -> None:
         """Configure the table and the models; nothing is simulated until ``fit``.
 
         ``seed`` drives the training leaks (evaluate on other seeds); ``ws`` = moments
         after the alarm (s) put in the table. ``classifier`` / ``regressor`` override
         ``backend`` (tests). ``estimate_rate=False`` skips the size model.
+        ``live=True``: ``locate`` returns as soon as the map is ready and attaches the leak
+        size of the previous update of the same emergency (see ``_locate_live``).
         """
         self.backend, self.n_train, self.seed = backend, n_train, seed
         self.ws, self.n_zones, self.estimate_rate = tuple(ws), n_zones, estimate_rate
-        self.classifier, self.regressor = classifier, regressor
+        self.classifier, self.regressor, self.live = classifier, regressor, live
         self._factory: Factory | None = None
+        self._pool: ThreadPoolExecutor | None = None
+        self._pending: tuple[tuple, Future] | None = None  # size call still running
+        self._known: tuple[tuple, np.ndarray] | None = None  # latest finished size
 
     def fit(self, factory: Factory) -> "TabPFNLocator":
         """Simulate the table for ``factory`` and fit the zone (and size) model on it."""
@@ -156,7 +162,46 @@ class TabPFNLocator:
 
     def locate(self, factory: Factory, readings: SensorReadings) -> SourceEstimate:
         """Probability map and leak size now (fits on first use)."""
+        if self.live and self.estimate_rate:
+            return self._locate_live(factory, readings)
         return self.locate_many(factory, [readings])[0]
+
+    # ------------------------------------------------------------ live: map first --
+    def _locate_live(self, factory: Factory, readings: SensorReadings) -> SourceEstimate:
+        """Wait only for the map; the size comes from the previous update of this emergency.
+
+        Both calls start together. The size call keeps running in the background and is
+        picked up by the next update (5 s later), so the size is at most one update old.
+        Latency = the map call alone (~1.7 s on the cloud instead of ~3.3 s for both).
+        """
+        if self._factory is not factory:
+            self.fit(factory)
+        t_a = alarm_time(readings.times, readings.values)
+        if t_a is None:
+            return self.locate_many(factory, [readings])[0]  # prior map and size, no call
+        key = _emergency_key(factory, readings, t_a)
+        X = moment_row(readings.times, readings.values, readings.wind, t_a)[None]
+        self._pool = self._pool or ThreadPoolExecutor(max_workers=2)
+        zone_call = self._pool.submit(self._zone_rows, X)
+        rate = self._previous_rate(key)
+        self._pending = (key, self._pool.submit(self._rate_rows, X))
+        grid = (zone_call.result()[0] @ self._spread).reshape(factory.ny, factory.nx)
+        return SourceEstimate(grid, rate, np.asarray(DEFAULT_LEVELS))
+
+    def _previous_rate(self, key: tuple) -> np.ndarray:
+        """Latest finished size estimate for this emergency, else the prior."""
+        if self._pending is not None and self._pending[1].done():
+            self._known = (self._pending[0], self._pending[1].result()[0])
+            self._pending = None
+        if self._known is not None and self._known[0] == key:
+            return self._known[1]
+        return prior_rate_quantiles()[1]
+
+
+def _emergency_key(factory: Factory, readings: SensorReadings, t_alarm: float) -> tuple:
+    """Same emergency = same plant, alarm time and readings up to the alarm."""
+    upto = readings.values[:, readings.times <= t_alarm + 1e-9]
+    return id(factory), t_alarm, np.nan_to_num(upto, nan=-1.0).round(9).tobytes()
 
 
 def _ready(X: np.ndarray, model: object) -> np.ndarray:
