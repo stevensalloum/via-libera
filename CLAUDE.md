@@ -31,6 +31,11 @@ change only through a PR the integrator reviews. Say so in the PR description.
   `test/<topic>`, `refactor/<topic>`. Merge within 1 to 2 hours, then delete the branch.
 - Pull `main` regularly (`git pull --rebase origin main`) and before every PR.
 - The integrator reviews and merges every 1 to 2 hours or when a PR is ready.
+  Only the integrator merges. PRs are squash-merged (the PR title becomes the commit,
+  so give it a conventional title) and the branch is deleted on GitHub automatically.
+  After a merge: `git switch main && git pull && git branch -d <branch>`.
+- GitHub enforces this: pushes to `main` are rejected and the `ruff + pytest` check
+  must pass on an up-to-date branch before merging.
 
 ### Before opening a PR
 
