@@ -9,10 +9,68 @@ propose changes in your status file or a PR description instead.
 **Gas-leak emergencies in a factory, solved with TabPFN** (Berlin AIxRobotics Hackathon,
 Prior Labs track). A leak starts; from sparse sensor readings and the wind we (1) locate the
 leak, (2) predict where it becomes toxic or flammable, (3) route every person out on the
-safest path. Full brief, targets and milestones: **`docs/brief.md`** (read it first).
+safest path. Full brief, targets and milestones: **`docs/brief.md`** (read it first); what every file
+and function does: **`docs/guide.md`**; datasets, seeds and the closed loop: **`docs/data.md`**.
 Python >= 3.12, package `tabpfn_spatial` under `src/`, tests under `tests/`.
 Environment: `uv sync`; run everything through `uv run`. `uv run leak-demo` runs the whole
 pipeline and draws `outputs/leak_demo.png`. Setup and daily flow: README.
+
+## Plan (agreed by the team, 2026-11-21)
+
+### Phases
+
+1. **Proof of concept (done):** the current simple simulator (2D advection-diffusion, one
+   uniform wind vector) with baselines and the first TabPFN parts. It stays runnable as the
+   baseline every later step is compared against.
+2. **Realistic simulator (next):** move to a stronger gas simulator (GADEN or similar; the
+   team chooses after reading). Rayan and Ahmad build on it once it is chosen. Until then
+   each person reads into their own problem and the whole task.
+3. **Real data only to validate:** fluid dynamics has no closed-form answer, so labelled
+   training cases come from simulation; real datasets (`docs/data.md`) check the method.
+4. **Factory:** randomly generated 2D outlines (`Factory.random`) for all computation. A 3D
+   view is optional for the final presentation only, unless height matters (heavy gases,
+   ceiling sensors).
+
+### Steven's steps, in order
+
+1. **Factory** simulated and viewable; navigating through it comes later.
+2. **Path finder:** people positions + source map (Rayan) + hazard map (Ahmad) -> the best
+   path for each person to an exit. Uses simulated stand-ins for the source and hazard
+   outputs until the real parts are linked. Compare algorithms: risk-cost Dijkstra (today),
+   A*, time-dependent search, many people with corridor capacity. In a smart factory the
+   same planner routes robots.
+3. **How people are guided out:** phones are often banned on the floor; floor LEDs and
+   screens are limited; drones and ceiling rails are too costly to sell. Current choice:
+   small ground guide robots with cameras (fixed in the hall and on the robot) that find
+   people and lead them out, several robots so nobody is left behind. Later: how many
+   robots and sensors and where, adapted to what a plant already has (retrofit or new
+   build) to keep the cost down.
+4. **Timing study (for the whole team):** how prediction quality changes with how long we
+   wait for readings (`t_obs`) and how often we predict. The output is curves of source
+   error, hazard Brier and people exposed against `t_obs` from 10 to 120 s, plus TabPFN
+   latency per call. Steven simulates them; the team picks the accepted decision time:
+   not so early that it is wrong, not so late that people are already exposed.
+5. **TabPFN inference mode (input for Rayan and Ahmad):** measure latency and tokens of
+   `fit_mode="fit_with_cache"` (the server keeps a cache of the training set, so later
+   predictions skip refitting), the fast model `model_path="v3.5-fast_default"` (4
+   ensemble members instead of 8), fewer `n_estimators`, and local inference on GPU/MPS.
+   Source and hazard owners choose using the timing study.
+
+## Document as you go
+
+Every step is part of the story we present (and may publish), so record it while you
+work, not at the end. Each person keeps **`docs/journey/<name>.md`** (only your own file,
+newest entry at the bottom). One entry per step:
+
+- **Date and step:** what changed and why (e.g. "uniform wind -> wind field around
+  machines, because gas piled up against machine faces").
+- **Figure:** `docs/figures/<name>/<step>.png`, made by a script in the repo; write the
+  command next to it. Keep each PNG small (under about 500 kB).
+- **Numbers:** metric, previous value, new value, settings (episodes, seed, backend, tokens).
+- **What did not work** and what you learned from it.
+
+Keep the old version runnable (a flag or a baseline class) so the before/after figures can
+be redrawn at any time.
 
 ## Ownership
 
@@ -70,7 +128,7 @@ every session: `git switch main && git pull`, read `docs/brief.md`, every
 
 1. `git fetch origin && git rebase origin/main`
 2. `uv run ruff check . && uv run ruff format --check . && uv run pytest`
-3. Update your own `docs/status/<name>.md`.
+3. Update your own `docs/status/<name>.md` and `docs/journey/<name>.md`.
 4. Fill in the PR template (what, why, how tested) and link the issue.
 
 ## Code rules
@@ -108,7 +166,8 @@ every session: `git switch main && git pull`, read `docs/brief.md`, every
 
 ## Secrets and data
 
-- Never commit secrets, API keys, datasets, model weights or large binaries.
+- Never commit secrets, API keys, datasets, model weights or large binaries. The only
+  binaries allowed are the small journey figures in `docs/figures/`.
 - Keys go in `.env` (gitignored); document variable names in `.env.example`.
 - Data lives in `data/`, generated artifacts in `outputs/`, weights in `checkpoints/`;
   all gitignored. Training tables come from the simulator: write the function that
