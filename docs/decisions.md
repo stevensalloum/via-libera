@@ -2,6 +2,19 @@
 
 Newest first. Each entry: date, decision, why, alternatives considered.
 
+## 2026-11-21: Project: gas-leak emergencies, walking skeleton first
+
+- **Decision:** four areas (sim, source, hazard, evac) behind typed contracts
+  (`contracts.py`), each with a non-TabPFN baseline, wired by `pipeline.py` from the start;
+  owners replace their baseline with a TabPFN class and compare on the same seeds.
+- **Calibration of the simulator:** `TOXIC_LIMIT = 0.1` covers ~15 % of the floor 1-3 min
+  after a leak (0.02 covered ~30 %, too easy to be exposed); flammable 0.3-3.0 near the leak.
+- **Baselines (30 episodes, seed 0):** source 9.4 m, hazard Brier 0.089, exposed 5.4 (plan)
+  vs 7.0 (standard) of 30 people.
+- **Why:** three people can work in parallel from minute one, and every improvement shows
+  up in the same end-to-end numbers we pitch.
+- **Alternatives:** wait for the simulator before starting the models (blocks two people).
+
 ## 2026-11-21: Shared core starter
 
 - **Decision:** `tabpfn_spatial.core` gives every application one interface:

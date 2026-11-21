@@ -3,7 +3,9 @@
 TabPFN for spatial awareness in robotics. Built at the Berlin AIxRobotics Hackathon
 (Prior Labs track).
 
-> Project description, results and demo instructions will be filled in during the hackathon.
+**Gas-leak emergencies in a factory:** from sparse sensors and the wind, locate the leak,
+predict where it turns toxic or flammable, and route every person out on the safest path.
+See [docs/brief.md](docs/brief.md). Run the whole pipeline: `uv run leak-demo`.
 
 ## Team
 
@@ -110,11 +112,16 @@ CI fails if `requirements.txt` is out of sync with `uv.lock`.
 
 ```
 src/tabpfn_spatial/
-  data/      simulation and datasets
-  models/    TabPFN wrappers, features, evaluation
-  demo/      agent, visuals, demo
-tests/       pytest + hypothesis suite (fast, runs in CI on every PR)
+  contracts.py  interfaces between the areas
+  pipeline.py   end to end: leak -> source -> hazard -> evacuation, scored on truth
+  sim/          factory layout and gas-dispersion simulator        (Steven)
+  source/       leak source detection                             (Rayan)
+  hazard/       toxic / fire hazard prediction                    (Ahmad)
+  evac/         evacuation planning                               (Steven)
+  core/         TabPFN backends, distributions, grids, metrics, budget guard
+tests/          mirrors src/ (fast, runs in CI on every PR)
 docs/
+  brief.md       project brief, tasks, targets, milestones
   decisions.md   design decisions log
   status/        per-person status files
 ```
