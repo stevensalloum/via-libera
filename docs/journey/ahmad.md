@@ -26,8 +26,31 @@ but missed more hazardous cell/time observations at this threshold. None of the
 four routes exposed a person in five cases; this is inconclusive. The sample is
 too small to select a production configuration.
 
-A proposed separate five-scenario cloud pilot using 8,000 context rows was quoted
-at 150,000 credits for 15 calls (forward and centroid baselines zero). It has
-not been run and awaits approval. Exact settings, source assumptions, feature
-definitions and limitations are in
+Exact settings, source assumptions, feature definitions and limitations are in
+[`SENSOR_HISTORY.md`](../../src/tabpfn_spatial/hazard/SENSOR_HISTORY.md).
+
+## 2026-11-21: Cloud pilots with centroid and Rayan source estimates
+
+The cloud version compared B (time context) against C (the same inputs plus
+sensor history), with the same generated examples and source estimate within
+each comparison. Five simulated leaks, seed 0, and 8,000 hazard context rows,
+seed 1001: centroid B vs C Brier 0.04006 vs 0.03609 and recall 0.45096 vs
+0.54306; Rayan B vs C Brier 0.03468 vs 0.03499 and recall 0.49163 vs 0.48804.
+Forward baselines were 0.05806 Brier and 0.52153 recall for centroid, and
+0.02786 and 0.76435 for Rayan. Rayan B/C false-positive rates were 0.00792 vs
+0.00655; centroid B/C 0.00803 vs 0.01131. This limited test does not support
+enabling sensor inputs by default when using Rayan, and does not prove they are
+redundant. The pilots used 150,000 and 190,000 quoted credits respectively.
+
+![Five-case cloud sensor-history comparisons](../figures/ahmad/02-sensor-history-cloud.png)
+
+Redraw without model calls:
+
+```bash
+uv run python tests/hazard/plot_sensor_history_cloud.py
+```
+
+Each pilot used one factory and the same simulator to make context and targets;
+Rayan used a pipe prior in the first case. Route replay omitted latency. Full
+settings, uncertainty and baselines are in
 [`SENSOR_HISTORY.md`](../../src/tabpfn_spatial/hazard/SENSOR_HISTORY.md).

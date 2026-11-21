@@ -173,3 +173,28 @@ def test_pilot_threshold_metrics_count_misses_and_false_alarms():
     assert result["recall"] == 0.5
     assert result["false_positive_rate"] == 0.5
     assert result["precision"] == 0.5
+
+
+def test_batched_training_source_replays_exact_observations():
+    script = runpy.run_path(str(Path(__file__).with_name("compare_sensor_history.py")))
+    recorder = script["RecordingLocator"]()
+    factory = Factory.default()
+    obs = observations()
+    estimate = recorder.locate(factory, obs)
+    replay = script["ReplayLocator"](recorder.observations, [estimate])
+    assert replay.locate(factory, obs) is estimate
+    replay.check_complete()
+
+
+def test_batched_training_source_rejects_changed_or_missing_observations():
+    script = runpy.run_path(str(Path(__file__).with_name("compare_sensor_history.py")))
+    factory = Factory.default()
+    obs = observations()
+    recorder = script["RecordingLocator"]()
+    estimate = recorder.locate(factory, obs)
+    replay = script["ReplayLocator"](recorder.observations, [estimate])
+    changed = SensorReadings(obs.positions, obs.times, obs.values + 1, obs.wind)
+    with pytest.raises(ValueError, match="observations differ"):
+        replay.locate(factory, changed)
+    with pytest.raises(ValueError, match="not all"):
+        replay.check_complete()

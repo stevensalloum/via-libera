@@ -1,7 +1,7 @@
 # Sensor-history experiment
 
-Status: **offline pilot only**. The seven-feature predictor remains the default;
-the new options are experimental and no cloud ablation has been run.
+Status: **exploratory offline and cloud pilots**. The seven-feature predictor
+remains the default; the new options are experimental.
 
 ## Question and implementation
 
@@ -102,7 +102,7 @@ Recreate it without model calls:
 uv run python tests/hazard/plot_sensor_history.py
 ```
 
-## Proposed cloud pilot: quoted, not run
+## Five-scenario cloud pilots
 
 For five scenarios and 8,000 context rows (100 leaks x 20 cells x four times),
 with three source hypotheses, open-cell-only queries and four forecast times,
@@ -121,9 +121,70 @@ uv run python tests/hazard/compare_sensor_history.py --backend cloud --run-cloud
   --episodes 5 --train-scenarios 100 --cells-per-scenario 20
 ```
 
-The offline 640-row pilot and proposed 8,000-row cloud pilot are different
-settings and should not be treated as a paired comparison against each other.
-Future work should evaluate Rayan's integrated source and rate estimate, more
-leaks and layouts, sensor faults, and end-to-end latency. The combined C variant
-does not isolate whether local readings, source-neighborhood readings, global
-context or trends caused any difference. Do not change the default on this pilot.
+Both pilots were run on the same five leak scenarios, seed 0, using 8,000 hazard
+context rows from 100 simulated leaks, seed 1001. Each A/B/C model in a pilot
+used identical context examples, evaluation readings, source estimates and
+targets. The forward simulator used the same source estimates. C differs from B
+only by the 28 sensor columns; it is the direct test of additional sensor
+information. All metrics below are toxic predictions over open cells and four
+forecast times 0/10/20/30 s after the observation, with 836 positive outcomes
+among 10,300 correlated cell/time outcomes.
+
+| Source and metric | Forward | A: spatial | B: + time | C: + sensors |
+| --- | ---: | ---: | ---: | ---: |
+| Centroid: Brier (lower better) | 0.05806 | 0.04173 | 0.04006 | 0.03609 |
+| Centroid: recall at 0.5 | 0.52153 | 0.46411 | 0.45096 | 0.54306 |
+| Centroid: false-positive rate at 0.5 | 0.02092 | 0.01363 | 0.00803 | 0.01131 |
+| Centroid: hazard median seconds | 0.00247 | 2.28886 | 2.19408 | 3.12874 |
+| Centroid: exposed routes (no latency) | 0/5 | 1/5 | 1/5 | 1/5 |
+| Rayan: Brier (lower better) | 0.02786 | 0.03291 | 0.03468 | 0.03499 |
+| Rayan: recall at 0.5 | 0.76435 | 0.50000 | 0.49163 | 0.48804 |
+| Rayan: false-positive rate at 0.5 | 0.00951 | 0.00475 | 0.00792 | 0.00655 |
+| Rayan: hazard median seconds | 0.00239 | 2.39598 | 2.36941 | 2.79001 |
+| Rayan: exposed routes (no latency) | 0/5 | 0/5 | 0/5 | 0/5 |
+
+The centroid comparison consumed 150,000 quoted credits (50,000 per cloud
+configuration; zero for centroid and forward). The Rayan comparison consumed
+190,000 quoted credits: 150,000 for hazard plus 40,000 for the batched source
+classifier and rate regressor (two calls each). These guard totals are estimates,
+not verified billing. Default cloud model versions were not pinned. Source
+context used Rayan's default 1,200 leaks, seed 12345, and a rate model. Of 100
+hazard training observations, 63 activated Rayan's locator; 4/5 evaluation
+observations did. The others used the pipe prior and prior rate. The first
+evaluation case is the artificially assumed alarm at zero concentration.
+Mean top-three retained mass was 6.66% with centroid and 78.28% with Rayan.
+The training contexts differ between source estimators, so assess B versus C
+within each pilot rather than attributing cross-source changes solely to the
+source model.
+
+With centroid, C improved Brier and recall versus B, with more false positives.
+With Rayan, C's Brier and recall were slightly worse than B, with fewer false
+positives; forward had a better Brier and recall than either TabPFN configuration
+on this tiny sample. There is no compelling evidence here to enable the added
+sensor inputs by default. Five correlated scenarios cannot establish that sensor
+history is redundant or prove any ranking. Hazard timings exclude source,
+routing and setup; batched source timings do not represent a live call. The
+planner's toxic/fire combination is provisional, and replay excludes latency.
+The simulator is also the source of both examples and targets.
+
+Reproduce the Rayan-source pilot (cloud calls spend credits):
+
+```bash
+uv run python tests/hazard/compare_sensor_history.py --quote-only --source rayan \
+  --episodes 5 --train-scenarios 100 --cells-per-scenario 20
+uv run python tests/hazard/compare_sensor_history.py --backend cloud --run-cloud \
+  --source rayan --episodes 5 --train-scenarios 100 --cells-per-scenario 20
+```
+
+![Cloud sensor-history pilots](../../../docs/figures/ahmad/02-sensor-history-cloud.png)
+
+Redraw the recorded aggregates without model calls:
+
+```bash
+uv run python tests/hazard/plot_sensor_history_cloud.py
+```
+
+The offline 640-row and cloud 8,000-row pilots use different settings and are not
+paired comparisons. Future tests need more leaks and layouts, sensor faults,
+independent simulation and end-to-end latency. C does not isolate whether local
+readings, source-neighborhood readings, global context or trends caused a change.
