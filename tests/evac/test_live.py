@@ -148,3 +148,23 @@ def test_latency_costs_exposure_on_a_leak_where_the_nearest_exit_is_gassed() -> 
     fast = _run()[-1].walkers["live"]
     slow = _run(latency=20.0)[-1].walkers["live"]
     assert slow.dose >= fast.dose
+
+
+# ---------------------------------------------------------------- detector alarm --
+def test_detector_alarm_starts_the_evacuation_at_the_first_sensor_alarm() -> None:
+    frames = _run(t_alarm=None)
+    t_alarm = frames[0].t_alarm
+    assert t_alarm is not None and t_alarm % 5.0 == 0
+    assert all(fr.t_alarm == t_alarm for fr in frames)
+    assert next(fr.t for fr in frames if fr.alarm) == t_alarm
+    assert next(fr.t for fr in frames if fr.replanned) == t_alarm
+    before = [fr for fr in frames if fr.t < t_alarm]
+    assert all(fr.walkers["live"].pos.tolist() == [5.0, 15.0] for fr in before)
+
+
+def test_no_detector_alarm_means_nobody_is_told_to_move() -> None:
+    sc = Scenario(np.array([11.0, 19.0]), 1e-6, np.array([-0.8, 0.0]))  # tiny leak
+    frames = list(run_live(F, sc, np.array([5.0, 15.0]), OracleLocator(sc), OracleHazard(sc),
+                           t_alarm=None, t_max=60.0))  # fmt: skip
+    assert frames[-1].t_alarm is None and not any(fr.alarm for fr in frames)
+    assert all(w.out_at is None for w in frames[-1].walkers.values())
