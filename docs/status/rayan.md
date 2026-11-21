@@ -4,8 +4,8 @@ Only Rayan's agent edits this file. Update it before every PR.
 
 ## Doing
 
-- Speed: return the map as soon as the location call answers (~1.7 s) and attach the
-  leak size when its call answers, so routes are not held up by the size model.
+- Waiting for review of PR #25. Next ideas: extend the table past alarm + 30 s; check
+  drifting wind and sensor dropouts.
 
 ## Done
 
@@ -41,11 +41,13 @@ Only Rayan's agent edits this file. Update it before every PR.
   | **TabPFN** | **26 %** | **13 %** | **9 %** | **8 %** |
   | TabPFN: true size inside its 80 % interval | 86 % | 88 % | 89 % | 92 % |
 
-- **Latency** (cloud, one live update): map only 1.68 s; map + size in parallel 3.25 s
-  (over the ~2 s budget, fix in Doing). Batch of 1,393 rows: 2.06 s.
+- **Latency** (cloud, one live update): map + size in parallel 3.25 s, over the ~2 s
+  budget, so `TabPFNLocator(live=True)` now returns the map first: **1.69 s**, with the
+  size of the previous update of the same emergency (the size call finished 0.25 s
+  later, ready for the next update). Batch of 1,393 rows: 2.06 s.
 - `uv run sync-check --source tabpfn_spatial.source:TabPFNLocator` (offline k-NN):
   0 problems, 0 warnings, default and random plant, t_obs 10/20/30/60 s.
-- Tokens for these results: 50,000 (5 cloud calls x 10,000). Reproduce:
+- Tokens for these results: 70,000 (7 cloud calls x 10,000). Reproduce:
   `uv run python -m tabpfn_spatial.source.benchmark --backend cloud`.
 - Earlier (old 110-site plant, 60 s after leak start): 0.8 m vs centroid 11.4 m. Superseded.
 - Finished GitHub setup.
