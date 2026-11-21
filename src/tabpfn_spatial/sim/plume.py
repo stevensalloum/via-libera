@@ -52,8 +52,11 @@ def wind_at(scenario: Scenario, times: np.ndarray) -> np.ndarray:
 
 def _divergence(c: np.ndarray, open_: np.ndarray, wind: np.ndarray, dx: float, d: float):
     """Net inflow per cell (B, ny, nx) from advection and diffusion fluxes."""
-    cp = np.pad(c, ((0, 0), (1, 1), (1, 1)))
-    op = np.pad(open_, 1, constant_values=1.0)
+    b, ny, nx = c.shape
+    cp = np.zeros((b, ny + 2, nx + 2))  # zero gas outside the hall (np.pad is ~2x slower)
+    cp[:, 1:-1, 1:-1] = c
+    op = np.ones((ny + 2, nx + 2))
+    op[1:-1, 1:-1] = open_
     out = np.zeros_like(c)
     for axis, vel in ((2, wind[:, 0]), (1, wind[:, 1])):
         if axis == 2:

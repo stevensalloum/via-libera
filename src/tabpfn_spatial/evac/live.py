@@ -1,9 +1,12 @@
 """Live evacuation of one person: replan every ``update_s`` seconds as the leak grows.
 
 Timeline: the leak starts at t = 0 and the person stands still. At ``t_alarm`` the alarm
-sounds and the person starts walking. From then on, every ``update_s`` seconds the system
-reads the sensors, asks the source and hazard models for new maps and replans. Three
-people start at the same point so the policies can be compared on the same leak:
+sounds; until the first route arrives the person either walks to the nearest exit
+(``before_plan="nearest"``) or waits where they are (``"wait"``). From then on, every ``update_s``
+seconds the system reads the sensors and asks the source and hazard models for new maps;
+the models take ``latency`` seconds, so each new route reaches the person that much later
+(planned from where they are by then). Three people start at the same point so the
+policies can be compared on the same leak:
 
 - ``live``: replanned at every update (what we build);
 - ``once``: planned at the alarm with the same models, never updated;
@@ -142,8 +145,18 @@ def run_live(
     t_max: float = 180.0,
     dt: float = 1.0,
     rng: np.random.Generator | None = None,
+    latency: float = 0.0,
+    before_plan: str = "nearest",
 ) -> Iterator[Frame]:
-    """Yield one ``Frame`` every ``dt`` seconds from 0 to ``t_max``."""
+    """Yield one ``Frame`` every ``dt`` seconds from 0 to ``t_max``.
+
+    ``latency``: seconds the source + hazard models take; a route made from the readings
+    at t reaches the person at t + latency. ``before_plan``: what ``live`` and ``once`` do
+    between the alarm and their first route, ``"nearest"`` (walk to the nearest exit) or
+    ``"wait"`` (stay put). ``nearest`` always walks.
+    """
+    if before_plan not in ("nearest", "wait"):
+        raise ValueError(f"before_plan must be 'nearest' or 'wait', not {before_plan!r}")
     planner = planner or RiskAwarePlanner()
     rng = rng or np.random.default_rng()
     times = np.arange(0.0, t_max + dt / 2, dt)
@@ -152,31 +165,37 @@ def run_live(
     harm = toxic | fire
     people = {p: Walker(np.asarray(start, float).copy(), planner.speed) for p in POLICIES}
     k_alarm, k_every = round(t_alarm / dt), max(1, round(update_s / dt))
+    k_lat = round(latency / dt)
     r = est = hz = None
     options: list[ExitOption] = []
+    pending: list[tuple[int, HazardMap, bool]] = []  # (step it lands, maps, first plan?)
     for k, t in enumerate(times):
+        t = float(t)
         replanned = k >= k_alarm and (k - k_alarm) % k_every == 0
+        if k == k_alarm:  # alarm: who walks to the nearest exit right away
+            calm = np.zeros((1, factory.ny, factory.nx))
+            walk = POLICIES if before_plan == "nearest" else ("nearest",)
+            for pol in walk:
+                _steer(people[pol], factory, planner, HazardMap(np.array([t]), calm, calm), t)
         if replanned:
-            r = readings(factory, scenario, float(t), rng)
+            r = readings(factory, scenario, t, rng)
             est = locator.locate(factory, r)
-            hz = predictor.predict(
-                factory, r, est, t + np.arange(0.0, HORIZON + 1e-9, FORECAST_STEP)
-            )
+            times_f = t + np.arange(0.0, HORIZON + 1e-9, FORECAST_STEP)
+            hz = predictor.predict(factory, r, est, times_f)
+            pending.append((k + k_lat, hz, k == k_alarm))
+        for _due, maps, first in [p for p in pending if p[0] == k]:
             if people["live"].out_at is None:
-                options = exit_options(factory, planner, people["live"].pos, hz, float(t))
-            _steer(people["live"], factory, planner, hz, float(t))
-            if k == k_alarm:
-                _steer(people["once"], factory, planner, hz, float(t))
-                zero = np.zeros_like(hz.p_toxic)
-                _steer(people["nearest"], factory, planner, HazardMap(hz.times, zero, zero), t)
+                options = exit_options(factory, planner, people["live"].pos, maps, t)
+            _steer(people["live"], factory, planner, maps, t)
+            if first:
+                _steer(people["once"], factory, planner, maps, t)
+        pending = [p for p in pending if p[0] > k]
         snap = {p: copy.deepcopy(w) for p, w in people.items()}
-        yield Frame(
-            float(t), fields[k], harm[k], snap, r, est, hz, options, replanned, k >= k_alarm
-        )
+        yield Frame(t, fields[k], harm[k], snap, r, est, hz, options, replanned, k >= k_alarm)
         for w in people.values():
             if w.out_at is None:
                 iy, ix = factory.cell_of(w.pos)
                 w.dose += float(fields[k, iy, ix]) * dt
                 w.harmful_s += dt * bool(harm[k, iy, ix])
                 if k >= k_alarm:
-                    w.step(dt, float(t))
+                    w.step(dt, t)
