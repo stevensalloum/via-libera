@@ -291,7 +291,7 @@ person; 95 % out = seconds since the leak):
 | D, 120x80 m, 600 | baseline | 2.94 / 8.8 % / 160 s | 0.76 / 4.6 % / 148 s | 0.66 / 5.1 % / 93 s |
 | E, 200x120 m, 1,200 | baseline | 1.17 / 2.9 % / 266 s | 0.48 / 2.4 % / 266 s | 1.03 / 4.5 % / 184 s |
 
-Narrow doors (C) look like B with about 5 % more harm and queueing.
+Narrow 0.8 m doors (C) look like B with about 5 % more harm and up to 20 % more queueing.
 
 What we learned:
 
