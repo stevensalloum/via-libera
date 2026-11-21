@@ -199,8 +199,136 @@ def figure(f: Factory):
     return fig, axes
 
 
+RUNS = Path("outputs/pipeline")
+
+
+def save_run(folder: Path, sc: Scenario, frames: list[PipelineFrame], meta: dict) -> Path:
+    """Pickle a computed run so it can be replayed later without calling the models."""
+    import datetime as dt
+    import pickle
+
+    folder.mkdir(parents=True, exist_ok=True)
+    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    path = folder / f"run-{stamp}-{meta.get('models', 'x')}-seed{meta.get('seed', 0)}.pkl"
+    path.write_bytes(pickle.dumps({"scenario": sc, "frames": frames, "meta": meta}))
+    return path
+
+
+def load_run(path: Path) -> tuple[Scenario, list[PipelineFrame], dict]:
+    """A run saved by ``save_run`` (only load files you made yourself: it is a pickle)."""
+    import pickle
+
+    d = pickle.loads(Path(path).read_bytes())
+    return d["scenario"], d["frames"], d["meta"]
+
+
+def end_frame(frames: list[PipelineFrame]) -> int:
+    """Last frame worth showing: 5 s after everyone is out."""
+    done = [
+        k for k, fr in enumerate(frames) if all(w.out_at is not None for w in fr.walkers.values())
+    ]
+    return min(len(frames) - 1, (done[0] if done else len(frames) - 1) + 5)
+
+
+def save_video(f: Factory, sc: Scenario, frames: list[PipelineFrame], path: Path, t_max: float,
+               end: int | None = None, fps: int = 4) -> Path:  # fmt: skip
+    """MP4 of the run (one frame per simulated second); GIF if ffmpeg is missing."""
+    import shutil
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    from matplotlib.animation import FFMpegWriter, PillowWriter
+
+    end = end_frame(frames) if end is None else end
+    if path.suffix == ".mp4" and not shutil.which("ffmpeg"):
+        path = path.with_suffix(".gif")
+    writer = FFMpegWriter(fps=fps, bitrate=4000) if path.suffix == ".mp4" else PillowWriter(fps=fps)
+    fig, axes = figure(f)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with writer.saving(fig, str(path), dpi=90 if path.suffix == ".mp4" else 60):
+        for k in range(end + 1):
+            draw(fig, axes, f, sc, frames, k, t_max)
+            writer.grab_frame()
+    import matplotlib.pyplot as plt
+
+    plt.close(fig)
+    return path
+
+
+def play(f: Factory, sc: Scenario, frames: list[PipelineFrame], t_max: float, video: Path) -> None:
+    """Window with Play/Pause, Restart, a time slider and Save video (keys: space, arrows, r)."""
+    import matplotlib.pyplot as plt
+    from matplotlib.animation import FuncAnimation
+    from matplotlib.widgets import Button, Slider
+
+    end = end_frame(frames)
+    fig, axes = figure(f)
+    fig.subplots_adjust(bottom=0.12)
+    state = {"k": 0, "play": True}
+    slider = Slider(fig.add_axes((0.30, 0.012, 0.45, 0.025)), "t (s)", 0, end, valinit=0, valstep=1)
+    b_play = Button(fig.add_axes((0.02, 0.008, 0.08, 0.035)), "Pause")
+    b_restart = Button(fig.add_axes((0.11, 0.008, 0.08, 0.035)), "Restart")
+    b_video = Button(fig.add_axes((0.20, 0.008, 0.08, 0.035)), "Save video")
+
+    def show(k: int) -> None:
+        state["k"] = int(max(0, min(end, k)))
+        draw(fig, axes, f, sc, frames, state["k"], t_max)
+        if slider.val != state["k"]:
+            slider.eventson = False
+            slider.set_val(state["k"])
+            slider.eventson = True
+        fig.canvas.draw_idle()
+
+    def toggle(_=None) -> None:
+        state["play"] = not state["play"]
+        if state["play"] and state["k"] >= end:
+            state["k"] = 0
+        b_play.label.set_text("Pause" if state["play"] else "Play")
+
+    def restart(_=None) -> None:
+        state["play"] = True
+        b_play.label.set_text("Pause")
+        show(0)
+
+    def save(_=None) -> None:
+        b_video.label.set_text("saving...")
+        fig.canvas.draw_idle()
+        print("video:", save_video(f, sc, frames, video, t_max, end))
+        b_video.label.set_text("Saved")
+
+    def tick(_) -> None:
+        if state["play"]:
+            if state["k"] >= end:
+                toggle()
+            else:
+                show(state["k"] + 1)
+
+    def key(e) -> None:
+        if e.key == " ":
+            toggle()
+        elif e.key == "right":
+            state["play"] = False
+            show(state["k"] + 1)
+        elif e.key == "left":
+            state["play"] = False
+            show(state["k"] - 1)
+        elif e.key == "r":
+            restart()
+
+    slider.on_changed(lambda v: (state.update(play=False), show(int(v))))
+    b_play.on_clicked(toggle)
+    b_restart.on_clicked(restart)
+    b_video.on_clicked(save)
+    fig.canvas.mpl_connect("key_press_event", key)
+    show(0)
+    anim = FuncAnimation(fig, tick, interval=300, cache_frame_data=False)
+    plt.show()
+    del anim
+
+
 def main() -> int:
-    """CLI: ``uv run evac-pipeline [--models team] [--backend baseline] [--seed 500]``."""
+    """CLI: ``uv run evac-pipeline [--at X Y] [--backend cloud --yes] [--load run.pkl]``."""
     p = argparse.ArgumentParser(description="One person, the team's models running back to back.")
     p.add_argument("--models", default="team", choices=("team", "perfect", "baseline"))
     p.add_argument("--backend", default="baseline", choices=("baseline", "cloud"))
@@ -209,54 +337,42 @@ def main() -> int:
     p.add_argument("--at", type=float, nargs=2, metavar=("X", "Y"), help="person start (m)")
     p.add_argument("--max-runs", type=int, default=8)
     p.add_argument("--t-max", type=float, default=120.0)
+    p.add_argument("--load", type=Path, help="replay a saved run (no model calls, no tokens)")
+    p.add_argument("--video", type=Path, help="save the run as an MP4 and exit")
     p.add_argument("--gif", type=Path)
     p.add_argument("--still", type=Path)
     a = p.parse_args()
-    if a.backend == "cloud" and a.models == "team" and not a.yes:
-        print(f"cloud run: up to {a.max_runs} runs x ~3 TabPFN calls (>= {a.max_runs * 30_000:,} "
-              "tokens). Re-run with --yes to spend them.")  # fmt: skip
-        return 1
     f = Factory.default()
-    sc, frames = compute(f, a.seed, a.at, a.models, a.backend, a.max_runs, a.t_max)
-    import matplotlib
-
+    if a.load:
+        sc, frames, meta = load_run(a.load)
+        print(f"replaying {a.load} ({meta})")
+        stem = a.load.with_suffix("")
+    else:
+        if a.backend == "cloud" and a.models == "team" and not a.yes:
+            print(f"cloud run: up to {a.max_runs} runs x ~3 TabPFN calls (>= "
+                  f"{a.max_runs * 30_000:,} tokens). Re-run with --yes to spend them.")  # fmt: skip
+            return 1
+        sc, frames = compute(f, a.seed, a.at, a.models, a.backend, a.max_runs, a.t_max)
+        meta = {"models": a.models, "backend": a.backend, "seed": a.seed, "at": a.at,
+                "max_runs": a.max_runs}  # fmt: skip
+        path = save_run(RUNS, sc, frames, meta)
+        stem = path.with_suffix("")
+        print(f"saved: {path}  (replay for free: uv run evac-pipeline --load {path})")
+    if a.video:
+        print("video:", save_video(f, sc, frames, a.video, a.t_max))
     if a.gif or a.still:
+        import matplotlib
+
         matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    fig, axes = figure(f)
-    done = [
-        k for k, fr in enumerate(frames) if all(w.out_at is not None for w in fr.walkers.values())
-    ]
-    end = done[0] if done else len(frames) - 1
-    end = min(len(frames) - 1, end + 5)
-    if a.still:
-        k = frames[-1].cycles[0].t_land if frames[-1].cycles else end
-        draw(fig, axes, f, sc, frames, int(min(k + 3, end)), a.t_max)
-        fig.savefig(a.still, dpi=80)
-        print(a.still)
-    if a.gif:
-        print(save_gif(f, sc, frames, fig, axes, a.gif, end, a.t_max))
-    if not (a.gif or a.still):
-        from matplotlib.animation import FuncAnimation
-
-        state = {"k": 0, "pause": False}
-
-        def tick(_):
-            if not state["pause"]:
-                state["k"] = min(state["k"] + 1, end)
-            draw(fig, axes, f, sc, frames, state["k"], a.t_max)
-
-        def key(e):
-            if e.key == " ":
-                state["pause"] = not state["pause"]
-            if e.key == "right":
-                state["k"] = min(state["k"] + 1, end)
-            if e.key == "left":
-                state["k"] = max(state["k"] - 1, 0)
-
-        fig.canvas.mpl_connect("key_press_event", key)
-        anim = FuncAnimation(fig, tick, interval=250, cache_frame_data=False)
-        plt.show()
-        del anim
+        fig, axes = figure(f)
+        end = end_frame(frames)
+        if a.still:
+            k = frames[-1].cycles[0].t_land if frames[-1].cycles else end
+            draw(fig, axes, f, sc, frames, int(min(k + 3, end)), a.t_max)
+            fig.savefig(a.still, dpi=80)
+            print(a.still)
+        if a.gif:
+            print(save_gif(f, sc, frames, fig, axes, a.gif, end, a.t_max))
+    if not (a.video or a.gif or a.still):
+        play(f, sc, frames, a.t_max, stem.with_suffix(".mp4"))
     return 0
