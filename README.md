@@ -34,6 +34,19 @@ pip install -e . --no-deps
 pytest
 ```
 
+## TabPFN API key
+
+Each person puts their own key in `.env` as `TABPFN_TOKEN=...` (never commit it), then:
+
+```bash
+uv run tabpfn-check           # verifies the key, shows usage and free cost quotes
+```
+
+Costs (measured 2026-11-21, TabPFN-3.5, 8 estimators): **10,000 tokens minimum per call**,
+growing mainly with test rows (1k train + 100k test x 10 cols = 26.6k; 1M test rows = 2M).
+Batch your queries into few large `predict` calls; quote first with
+`tabpfn_client.estimate_cost` (free, sends only shapes).
+
 ## Daily flow
 
 1. Start of every work block: `git switch main && git pull`
