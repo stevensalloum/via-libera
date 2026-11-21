@@ -326,3 +326,28 @@ What we learned:
   replaced by seconds queueing per person.
 - **A door-flow bug:** the first crowd simulator let 1.0 person/s through a 1.3 person/s
   door, because I capped the flow budget the wrong way. The door test caught it.
+
+## 2026-11-21 · Taking Ahmad's measured latency as the design point
+
+**What changed and why.** The timing study (simulated delays) asked for a route within about
+2 s of the readings. Ahmad measured the real thing on 30 early-alarm pipe leaks (PR #24):
+- **Cloud TabPFN:** source + hazard + one route takes a median of 3.9 s, 4.9 s at p95;
+- **fast model:** about 2.7 s for the hazard call alone;
+- **forward-simulation baseline:** 0.01 s.
+
+So 2 s is not reachable in the cloud, and the design point is now about 5 s. His replay
+also showed what to do about it: staged routes. At the alarm everyone heads for the
+nearest exit; the baseline route lands almost instantly; the TabPFN route replaces it when
+it arrives. That exposed 1/30 people, against 2/30 for TabPFN alone, 4/30 for the forward
+baseline alone and 4/30 for the nearest exit (mean harmful seconds 0.33 / 0.47 / 1.17 /
+0.87). In our timing study a 5 s delay still kept about 35 % of the routing gain with people
+walking meanwhile, and the baseline stage recovers part of the rest.
+
+`docs/sync.md` now carries these numbers. I test-merged his branch on top of #23-#29:
+- no conflicts, all tests and lint pass;
+- `uv run sync-check --hazard tabpfn_spatial.hazard:TabPFNHazardPredictor`: 0 problems on
+  both plants at 10/20/30/60 s. The offline k-NN backend takes ~4.5 s per call; that time
+  is not a cloud measurement.
+
+**Next:** the live and crowd loops get the staged policy (baseline route, then the TabPFN
+route after a measured latency), and the crowd ladder is rerun with a 5 s latency.
