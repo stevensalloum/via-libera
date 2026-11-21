@@ -233,7 +233,9 @@ def main() -> int:
     p.add_argument("--leaks", type=int, default=20)
     p.add_argument("--first-seed", type=int, default=500, help="held-out leak seeds")
     p.add_argument("--detour", type=float, default=DETOUR_WEIGHT, help="ccrp detour weight")
-    p.add_argument("--workers", type=int, default=8)
+    p.add_argument(
+        "--workers", type=int, default=4, help="parallel processes (keep the laptop usable)"
+    )
     p.add_argument("--rungs", nargs="+", default=[r.name for r in RUNGS])
     p.add_argument(
         "--models",

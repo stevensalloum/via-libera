@@ -179,9 +179,12 @@ export function exterior(scene, F) {
 }
 
 export function animateDetails(root, t) {
-  root.traverse((o) => {
+  if (!root.userData.cranes) {
+    root.userData.cranes = [];
+    root.traverse((o) => { if (o.userData.crane) root.userData.cranes.push(o); });
+  }
+  root.userData.cranes.forEach((o) => {
     const c = o.userData.crane;
-    if (!c) return;
     o.position.x = (c.W / 2 - 4) * Math.sin(t * 0.05);
     c.trolley.position.z = (c.H / 2 - 4) * Math.sin(t * 0.11);
   });
