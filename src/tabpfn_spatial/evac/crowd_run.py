@@ -115,7 +115,11 @@ def prepare(
         rate = 1.0
         if est.rate is not None and est.rate_levels is not None:
             rate = float(np.interp(0.5, est.rate_levels, est.rate))
-        log.append({"t": float(t), "locate_s": t1 - t0, "predict_s": t2 - t1,
+        top = est.top_cells(3)
+        guesses = [
+            {"xy": f.centre(int(a), int(b)).tolist(), "p": float(est.prob[a, b])} for a, b in top
+        ]
+        log.append({"t": float(t), "locate_s": t1 - t0, "predict_s": t2 - t1, "source_top": guesses,
                     "source_error_m": float(np.linalg.norm(f.centre(int(iy), int(ix)) - sc.source)),
                     "rate_median": rate, "rate_true": float(sc.rate)})  # fmt: skip
     return Prepared(sc, times, fields, toxic | fire, t_alarm, replan, danger, log)
