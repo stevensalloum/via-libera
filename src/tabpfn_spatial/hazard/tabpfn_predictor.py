@@ -17,6 +17,7 @@ from tabpfn_spatial.core.models import Regressor, make_regressor
 from tabpfn_spatial.hazard.features import cell_features
 from tabpfn_spatial.hazard.geometry import path_features
 from tabpfn_spatial.hazard.library import DEFAULT_CONTEXT_SEED, training_rows
+from tabpfn_spatial.hazard.sensor_history import sensor_history_features, time_context_features
 from tabpfn_spatial.hazard.source_selection import SourceSelection, select_source_cells
 from tabpfn_spatial.sim import Factory
 
@@ -45,6 +46,8 @@ class TabPFNHazardPredictor:
         include_geometry: bool = False,
         source_mass: float | None = None,
         open_cells_only: bool = False,
+        include_time_context: bool = False,
+        include_sensor_history: bool = False,
     ) -> None:
         """Choose backend, source selection, optional geometry and open-cell queries."""
         if top_k < 1:
@@ -55,6 +58,8 @@ class TabPFNHazardPredictor:
         self.include_geometry = include_geometry
         self.source_mass = source_mass
         self.open_cells_only = open_cells_only
+        self.include_time_context = include_time_context or include_sensor_history
+        self.include_sensor_history = include_sensor_history
         self.last_selection: SourceSelection | None = None
 
     def fit(
@@ -66,6 +71,7 @@ class TabPFNHazardPredictor:
         seed: int = DEFAULT_CONTEXT_SEED,
         *,
         source_locator: SourceLocator | None = None,
+        observation_times: np.ndarray | None = None,
     ) -> "TabPFNHazardPredictor":
         """Fit on simulated concentrations; optionally use the live source locator.
 
@@ -80,6 +86,9 @@ class TabPFNHazardPredictor:
             seed,
             include_geometry=self.include_geometry,
             locator=source_locator,
+            include_time_context=self.include_time_context,
+            include_sensor_history=self.include_sensor_history,
+            observation_times=observation_times,
         )
         self.model = make_regressor(self.backend).fit(x, y)
         return self
@@ -119,9 +128,21 @@ class TabPFNHazardPredictor:
         features = []
         for idx in indices:
             geometry = path_features(factory, all_xy[idx], xy) if self.include_geometry else None
+            history = (
+                sensor_history_features(readings, all_xy[idx], xy, readings.t_obs)
+                if self.include_sensor_history
+                else None
+            )
             for t in times:
                 row = cell_features(factory, all_xy[idx], readings.wind, rate, float(t), xy)
-                features.append(np.column_stack([row, geometry]) if geometry is not None else row)
+                columns = [row]
+                if geometry is not None:
+                    columns.append(geometry)
+                if self.include_time_context:
+                    columns.append(time_context_features(readings.t_obs, float(t), len(xy)))
+                if history is not None:
+                    columns.append(history)
+                features.append(np.column_stack(columns) if len(columns) > 1 else row)
         dist = self.model.predict_dist(np.concatenate(features))
         toxic = 1 - _cdf(dist.values, dist.levels, TOXIC_LIMIT)
         fire = _cdf(dist.values, dist.levels, UEL) - _cdf(dist.values, dist.levels, LEL)
