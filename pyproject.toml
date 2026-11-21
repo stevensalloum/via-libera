@@ -10,7 +10,14 @@ authors = [
     { name = "Rayan" },
     { name = "Ahmad" },
 ]
-dependencies = []
+dependencies = [
+    "numpy>=1.26",
+    "python-dotenv>=1.0",
+    "tabpfn-client>=0.10",
+]
+
+[project.scripts]
+tabpfn-check = "tabpfn_spatial.tabpfn_check:main"
 
 [dependency-groups]
 dev = [
