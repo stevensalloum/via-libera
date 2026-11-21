@@ -94,6 +94,9 @@ def test_plant_without_pipes_keeps_the_old_machine_rule() -> None:
     assert old.pipes is None and old.fittings is None
     assert len(old.leak_sites) == 110  # the v0 baseline plant
     np.testing.assert_array_equal(old.leak_weights, np.ones(110))
+    picks = np.random.default_rng(5).integers(110, size=4)  # the v0 draw
+    got = [s.source for s in sample_scenarios(old, 4, np.random.default_rng(5))]
+    np.testing.assert_array_equal(got, old.leak_sites[picks])
 
 
 def test_random_pipes_are_reproducible() -> None:

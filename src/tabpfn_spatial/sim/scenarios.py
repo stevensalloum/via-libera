@@ -19,7 +19,10 @@ def sample_scenarios(
     """
     sites = factory.leak_sites
     w = factory.leak_weights
-    picks = sites[rng.choice(len(sites), size=n, p=w / w.sum())]
+    if np.all(w == w[0]):  # uniform: same draws as v0, so old seeds reproduce
+        picks = sites[rng.integers(len(sites), size=n)]
+    else:
+        picks = sites[rng.choice(len(sites), size=n, p=w / w.sum())]
     rates = np.exp(rng.uniform(np.log(0.5), np.log(2.0), size=n))
     speed = rng.uniform(0.2, 1.5, size=n)
     angle = rng.uniform(0, 2 * np.pi, size=n)
