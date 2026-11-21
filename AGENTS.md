@@ -10,7 +10,7 @@ propose changes in your status file or a PR description instead.
 Prior Labs track). A leak starts; from sparse sensor readings and the wind we (1) locate the
 leak, (2) predict where it becomes toxic or flammable, (3) route every person out on the
 safest path. Full brief, targets and milestones: **`docs/brief.md`** (read it first); what every file
-and function does: **`docs/guide.md`**.
+and function does: **`docs/guide.md`**; datasets, seeds and the closed loop: **`docs/data.md`**.
 Python >= 3.12, package `tabpfn_spatial` under `src/`, tests under `tests/`.
 Environment: `uv sync`; run everything through `uv run`. `uv run leak-demo` runs the whole
 pipeline and draws `outputs/leak_demo.png`. Setup and daily flow: README.

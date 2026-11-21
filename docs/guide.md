@@ -63,6 +63,7 @@ is ready in `core/`.
 |---|---|
 | `docs/brief.md` | The plan: story, system, simulator facts, baselines to beat, per-area TabPFN recipes, milestones |
 | `docs/guide.md` | This file |
+| `docs/data.md` | Datasets, seed ranges, the closed loop between the parts, evaluation protocol |
 | `docs/decisions.md` | Design decisions with date, reason, alternatives, and measured numbers |
 | `docs/status/{steven,rayan,ahmad}.md` | Each person's Doing / Done / Needs / Blocked; only that person's agent edits it |
 
@@ -204,7 +205,7 @@ exposed 5.4 vs 7.0 of 30 (5.9 vs 7.3).
 |---|---|---|
 | PR #23, issue #20: sim v1 (drifting wind, sensor faults, random plants, `sim-viz`) | Steven | Open, waiting for the visual review |
 | PR #24, issue #19: TabPFN hazard predictor (`hazard/features.py`, `library.py`, `tabpfn_predictor.py`, `benchmark.py`) | Ahmad | Open; first result on 3 emergencies: Brier 0.0566 vs 0.0591, AUC 0.855 vs 0.799, 30k tokens; 30-emergency run pending |
-| Issue #18: TabPFN source locator | Rayan | In progress |
+| PR #25, issue #18: TabPFN source locator (`source/features.py`, `library.py`, `tabpfn_locator.py`, `benchmark.py`) | Rayan | Open; 30 emergencies: source error 1.03 m vs 9.41 m, downstream hazard Brier 0.040 vs 0.089, exposed 4.6 vs 5.4; 310k tokens |
 | Issue #21: risk-budget evacuation planner | Steven | Not started (after the simulator review) |
 | Issue #22: demo UI | Steven | After milestone 1 |
 
