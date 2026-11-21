@@ -5,10 +5,12 @@ simulation (1 s steps), the detector alarm, and the danger map from the models a
 replan time (alarm, then every ``update_s``). ``run_crowd`` then evacuates a crowd with
 one planner, so planners are compared on exactly the same leak, alarm and maps.
 
-Models: ``perfect`` (true leak + true future: isolates planning) or ``baseline``
-(centroid source + forward-simulation hazard: today's realistic models).
+Models: ``perfect`` (true leak + true future: isolates planning), ``baseline`` (centroid
+source + forward-simulation hazard) or ``tabpfn`` (the team's TabPFN locator, leak size and
+hazard models; offline k-NN stand-in unless ``backend="cloud"``).
 """
 
+import time
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -35,6 +37,7 @@ class Prepared:
     t_alarm: float | None
     replan_times: np.ndarray
     danger: list[np.ndarray]  # model danger map at each replan time
+    log: list[dict] = field(default_factory=list)  # per update: model times and errors
 
 
 @dataclass
@@ -45,6 +48,32 @@ class CrowdResult:
     frames: list[dict] = field(default_factory=list)
 
 
+MODELS = ("perfect", "baseline", "tabpfn")
+
+
+def make_models(
+    f: Factory, sc: Scenario, models: str, backend: str = "baseline", n_train: int = 1200
+):
+    """(locator, predictor) for a model setting; ``tabpfn`` fits the team's models on ``f``.
+
+    ``tabpfn`` = Rayan's ``TabPFNLocator`` (location + leak size) and Ahmad's
+    ``TabPFNHazardPredictor``; ``backend="baseline"`` swaps TabPFN for the offline k-NN
+    stand-in (no tokens), ``"cloud"`` uses TabPFN. Fitting simulates their training
+    tables: reuse the pair across leaks of the same plant.
+    """
+    if models not in MODELS:
+        raise ValueError(f"models must be one of {MODELS}, not {models!r}")
+    if models == "perfect":
+        return OracleLocator(sc, sigma=0.0), OracleHazard(sc)
+    if models == "baseline":
+        return WeightedCentroidLocator(), ForwardSimPredictor()
+    from tabpfn_spatial.hazard import TabPFNHazardPredictor
+    from tabpfn_spatial.source import TabPFNLocator
+
+    return (TabPFNLocator(backend=backend, n_train=n_train).fit(f),
+            TabPFNHazardPredictor(backend=backend).fit(f))  # fmt: skip
+
+
 def prepare(
     f: Factory,
     sc: Scenario,
@@ -53,25 +82,43 @@ def prepare(
     update_s: float = 15.0,
     seed: int = 0,
     sample_every: float = 5.0,
+    fitted: tuple | None = None,
+    backend: str = "baseline",
 ) -> Prepared:
-    """Truth, alarm and model danger maps for one leak. Cost: dominated by the models."""
-    if models not in ("perfect", "baseline"):
-        raise ValueError(f"models must be 'perfect' or 'baseline', not {models!r}")
+    """Truth, alarm and model danger maps for one leak. Cost: dominated by the models.
+
+    ``fitted``: a (locator, predictor) pair to reuse (perfect models are bound to ``sc``,
+    so they are always rebuilt). Every update is logged: model times, source error,
+    median leak size.
+    """
+    if models not in MODELS:
+        raise ValueError(f"models must be one of {MODELS}, not {models!r}")
     times = np.arange(0.0, t_max + 0.5, 1.0)
     fields = simulate(f, [sc], times)[0]
     toxic, fire = hazard_from_fields(f, fields)
     t_alarm = first_alarm(f, times, fields, every=sample_every)
     replan = np.arange(t_alarm, t_max + 1e-9, update_s) if t_alarm is not None else np.array([])
-    if models == "perfect":
-        loc, pred = OracleLocator(sc, sigma=0.0), OracleHazard(sc)
+    if models == "perfect" or fitted is None:
+        loc, pred = make_models(f, sc, models, backend)
     else:
-        loc, pred = WeightedCentroidLocator(), ForwardSimPredictor()
-    rng, danger = np.random.default_rng(seed), []
+        loc, pred = fitted
+    rng, danger, log = np.random.default_rng(seed), [], []
     for t in replan:
         r = readings(f, sc, float(t), rng, every=sample_every)
-        hz = pred.predict(f, r, loc.locate(f, r), t + np.arange(0.0, 120.0 + 1e-9, 10.0))
+        t0 = time.perf_counter()
+        est = loc.locate(f, r)
+        t1 = time.perf_counter()
+        hz = pred.predict(f, r, est, t + np.arange(0.0, 120.0 + 1e-9, 10.0))
+        t2 = time.perf_counter()
         danger.append(danger_window(hz, float(t), AHEAD))
-    return Prepared(sc, times, fields, toxic | fire, t_alarm, replan, danger)
+        iy, ix = est.top_cells(1)[0]
+        rate = 1.0
+        if est.rate is not None and est.rate_levels is not None:
+            rate = float(np.interp(0.5, est.rate_levels, est.rate))
+        log.append({"t": float(t), "locate_s": t1 - t0, "predict_s": t2 - t1,
+                    "source_error_m": float(np.linalg.norm(f.centre(int(iy), int(ix)) - sc.source)),
+                    "rate_median": rate, "rate_true": float(sc.rate)})  # fmt: skip
+    return Prepared(sc, times, fields, toxic | fire, t_alarm, replan, danger, log)
 
 
 def _snapshot(t: float, k: int, crowd: Crowd) -> dict:

@@ -238,7 +238,9 @@ def main() -> int:
     """CLI: ``uv run evac-timing [--leaks 100] [--workers 8] [--out outputs/timing]``."""
     p = argparse.ArgumentParser(description="Harm vs alarm time, update rate and latency.")
     p.add_argument("--leaks", type=int, default=100)
-    p.add_argument("--workers", type=int, default=8)
+    p.add_argument(
+        "--workers", type=int, default=4, help="parallel processes (keep the laptop usable)"
+    )
     p.add_argument("--out", type=Path, default=Path("outputs/timing"))
     p.add_argument("--plot-only", action="store_true", help="redraw from results.json")
     a = p.parse_args()
