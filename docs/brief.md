@@ -37,13 +37,19 @@ The system acts at `T_OBS = 60 s` (sensors sampled every 5 s) and forecasts to 1
 Toxic above `TOXIC_LIMIT = 0.1` (~15 % of the floor), flammable between `LEL = 0.3` and
 `UEL = 3.0`, fire only next to hot machines. 500 leaks x 120 s simulate in ~1 s.
 
+**Simulator v1 options (all off by default; the team switches them on together):**
+`sample_scenarios(..., drift=0.05)` makes the wind direction wander during the leak
+(`sim.wind_at(scenario, times)` gives the true wind; readings report the window mean);
+`readings(..., dropout=0.1, stuck=0.05)` adds dead sensors (rows of NaN) and stuck ones;
+`Factory.random(rng)` builds a new connected plant layout (for the "any plant" claim).
+
 ## Baselines to beat (`uv run leak-demo --episodes 30`, seed 0)
 
 | Metric | Baseline | Lower is better |
 |---|---|---|
-| `source_error_m` (most likely cell to true leak) | **9.4 m** (weighted sensor centroid) | yes |
-| `hazard_brier` (P(harm) vs truth, all forecast times) | **0.089** (forward sim from the single best guess, 0/1) | yes |
-| `exposed_plan` vs `exposed_standard` (of 30 people) | **5.4 vs 7.0** (risk-aware Dijkstra on the baseline hazard) | yes |
+| `source_error_m` (most likely cell to true leak) | **9.7 m** (weighted sensor centroid) | yes |
+| `hazard_brier` (P(harm) vs truth, all forecast times) | **0.091** (forward sim from the single best guess, 0/1) | yes |
+| `exposed_plan` vs `exposed_standard` (of 30 people) | **5.9 vs 7.3** (risk-aware Dijkstra on the baseline hazard) | yes |
 
 Compare your version with `pipeline.evaluate(Factory.default(), 30, seed=0, locator=...)`
 (or `predictor=`, `planner=`); same seeds, so numbers are comparable across people.

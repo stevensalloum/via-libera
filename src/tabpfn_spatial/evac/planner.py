@@ -1,9 +1,10 @@
 """Baseline evacuation planner and the shared exposure check.
 
-Dijkstra on the 8-connected grid from each person to every exit. A step costs its length
-plus ``risk_weight`` x the hazard probability of the cell at the time the person arrives
-(walking at ``speed``). With an all-zero hazard map this is the conventional fixed plan
-(nearest exit). Cost: O(N log N) per person for N grid cells.
+Dijkstra on the 8-connected grid from each person to every exit (a diagonal step is only
+allowed when both cells it squeezes past are open: no cutting machine corners). A step
+costs its length plus ``risk_weight`` x the hazard probability of the cell at the time the
+person arrives (walking at ``speed``). With an all-zero hazard map this is the
+conventional fixed plan (nearest exit). Cost: O(N log N) per person for N grid cells.
 """
 
 import heapq
@@ -56,6 +57,8 @@ class RiskAwarePlanner:
                 nxt = (cell[0] + dy, cell[1] + dx)
                 if not (0 <= nxt[0] < f.ny and 0 <= nxt[1] < f.nx) or f.walls[nxt]:
                     continue
+                if dy and dx and (f.walls[cell[0] + dy, cell[1]] or f.walls[cell[0], cell[1] + dx]):
+                    continue  # would cut the corner of a solid cell
                 step = f.cell * (1.4142 if dy and dx else 1.0)
                 arrive = t_start + (length[cell] + step) / self.speed
                 k = int(np.argmin(np.abs(times - arrive)))
@@ -70,10 +73,20 @@ class RiskAwarePlanner:
         while path[-1] in parent:
             path.append(parent[path[-1]])
         cells = np.array(path[::-1])
-        arrive = t_start + _arrival_lengths(f, cells) / self.speed
-        k = np.argmin(np.abs(times[None] - arrive[:, None]), axis=1)
-        p = danger[k, cells[:, 0], cells[:, 1]]
+        p = _danger_at_arrival(f, cells, danger, times, t_start, self.speed)
         return Route(cells, exit_index, float(1 - np.prod(1 - p)))
+
+    def cost(self, f: Factory, route: Route, hazard: HazardMap, t_start: float) -> float:
+        """The planner's own cost of ``route``: metres + ``risk_weight`` x P(harm) per step."""
+        p = _danger_at_arrival(f, route.cells, _danger(hazard), hazard.times, t_start, self.speed)
+        return float(_arrival_lengths(f, route.cells)[-1] + self.risk_weight * p[1:].sum())
+
+
+def _danger_at_arrival(f, cells, danger, times, t_start, speed) -> np.ndarray:
+    """(m,) P(harm) of each route cell at the forecast time nearest to the arrival."""
+    arrive = t_start + _arrival_lengths(f, cells) / speed
+    k = np.argmin(np.abs(np.asarray(times)[None] - arrive[:, None]), axis=1)
+    return danger[k, cells[:, 0], cells[:, 1]]
 
 
 def _arrival_lengths(f: Factory, cells: np.ndarray) -> np.ndarray:
