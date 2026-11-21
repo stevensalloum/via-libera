@@ -248,6 +248,7 @@ export function replayPanel(replay) {
       <label><input type="checkbox" id="r-gas" checked> true gas</label>
       <label><input type="checkbox" id="r-danger"> predicted danger</label>
       <label><input type="checkbox" id="r-source" checked> leak guesses</label>
+      <button id="r-record" title="Plays from the start and saves the 3D view as a video file">&#9679; Record video</button>
     </div>
     <div class="rtrack"><input type="range" id="r-time" min="0" max="${rep.t_end}" step="0.1" value="0">
       <div class="ticks">${updates}${rep.t_alarm !== null ? `<b style="left:${(100 * rep.t_alarm) / rep.t_end}%"></b>` : ""}</div></div>
@@ -266,6 +267,7 @@ export function replayPanel(replay) {
   $("r-danger").onchange = (e) => { replay.danger.mesh.visible = e.target.checked; };
   replay.showSource = true;
   $("r-source").onchange = (e) => { replay.showSource = e.target.checked; replay.lastUpdate = -2; };
+  $("r-record").onclick = () => recordVideo(replay, $("r-record"));
   return () => {
     $("r-play").innerHTML = replay.playing ? "&#10074;&#10074; Pause" : "&#9654; Play";
     $("r-time").value = replay.t;
@@ -283,4 +285,34 @@ export function replayPanel(replay) {
       `${s.queue} queueing, <span class="ingas">${s.gas} in gas now</span> &middot; final: ${m.harm_s_mean.toFixed(2)} s in gas per person, ` +
       `${m.exposed_pct.toFixed(1)} % exposed, 95 % out at ${Number.isFinite(m.out_95_s) ? m.out_95_s.toFixed(0) + " s" : "-"}`;
   };
+}
+
+// Record the 3D canvas while the replay plays from the start; download a WebM at the end.
+// (Labels are HTML on top of the canvas and are not in the video.)
+function recordVideo(replay, button) {
+  const canvas = document.querySelector("#app canvas");
+  if (!canvas.captureStream || typeof MediaRecorder === "undefined") {
+    alert("This browser cannot record the canvas; use screen recording (Cmd+Shift+5).");
+    return;
+  }
+  const type = ["video/webm;codecs=vp9", "video/webm"].find((t) => MediaRecorder.isTypeSupported(t));
+  const rec = new MediaRecorder(canvas.captureStream(30), { mimeType: type, videoBitsPerSecond: 8e6 });
+  const chunks = [];
+  rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  rec.onstop = () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(chunks, { type: "video/webm" }));
+    a.download = `factory-replay-${replay.rep.seed}-${replay.planner}.webm`;
+    a.click();
+    button.disabled = false;
+    button.innerHTML = "&#9679; Record video";
+  };
+  replay.t = 0;
+  replay.playing = true;
+  button.disabled = true;
+  button.textContent = "Recording...";
+  rec.start(1000);
+  const check = setInterval(() => {
+    if (!replay.playing) { clearInterval(check); rec.stop(); }
+  }, 250);
 }
