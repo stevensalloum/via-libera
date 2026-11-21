@@ -20,7 +20,7 @@ from tabpfn_spatial.evac.crowd_plan import DETOUR_WEIGHT, PLANNERS, assign
 from tabpfn_spatial.evac.fields import danger_window
 from tabpfn_spatial.evac.standins import OracleHazard, OracleLocator
 from tabpfn_spatial.hazard import ForwardSimPredictor, hazard_from_fields
-from tabpfn_spatial.sim import Factory, Scenario, first_alarm, readings, simulate
+from tabpfn_spatial.sim import Factory, Scenario, first_alarm, sensor_history, simulate
 from tabpfn_spatial.source import WeightedCentroidLocator
 
 AHEAD = 60.0  # seconds of forecast folded into each danger map
@@ -103,8 +103,9 @@ def prepare(
     else:
         loc, pred = fitted
     rng, danger, log = np.random.default_rng(seed), [], []
+    history = sensor_history(f, sc, t_max, rng, every=sample_every)
     for t in replan:
-        r = readings(f, sc, float(t), rng, every=sample_every)
+        r = history(float(t))  # one fixed history: old readings never change
         t0 = time.perf_counter()
         est = loc.locate(f, r)
         t1 = time.perf_counter()

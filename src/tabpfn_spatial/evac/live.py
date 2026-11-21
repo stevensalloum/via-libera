@@ -35,7 +35,14 @@ from tabpfn_spatial.contracts import (
 )
 from tabpfn_spatial.evac.planner import WALK_SPEED, RiskAwarePlanner
 from tabpfn_spatial.hazard import hazard_from_fields
-from tabpfn_spatial.sim import Factory, Scenario, first_alarm, readings, simulate
+from tabpfn_spatial.sim import (
+    Factory,
+    Scenario,
+    first_alarm,
+    readings,
+    sensor_history,
+    simulate,
+)
 
 POLICIES = ("live", "once", "nearest")
 FORECAST_STEP = 10.0  # seconds between forecast maps
@@ -300,6 +307,7 @@ def run_pipeline(
     if t_alarm is None:
         t_alarm = first_alarm(factory, times, fields, every=sample_every)
     people = {p: Walker(np.asarray(start, float).copy(), planner.speed) for p in POLICIES}
+    history = sensor_history(factory, scenario, t_max, rng, every=sample_every)
     started: list[Cycle] = []
     landed: list[Cycle] = []
     running: Cycle | None = None
@@ -321,7 +329,7 @@ def run_pipeline(
             landed.append(running)
             running = None
         if alarm and running is None and len(started) < max_runs and people["live"].out_at is None:
-            r = readings(factory, scenario, t, rng, every=sample_every)
+            r = history(t)  # every reading so far; old ones never change
             t0 = time.perf_counter()
             est = locator.locate(factory, r)
             t1 = time.perf_counter()
