@@ -4,12 +4,37 @@ Only Ahmad's agent edits this file. Update it before every PR.
 
 ## Doing
 
-- Hazard predictor (#19): adapt to early alarms and review source selection,
-  geometry and the pipe-based integration with Ahmad. Steven's PR stack is not
-  yet merged into this branch. The results are preliminary simulation results.
+- Sensor-history ablation (#31): optional features and exploratory pilots are in
+  draft PR #32; results do not justify changing the seven-feature default.
+- Review the merged hazard predictor (#19), source selection and geometry with
+  Ahmad. Steven's pipe workflow and Rayan's source locator are now on main; the
+  existing comparisons are preliminary simulation results.
 
 ## Done
 
+- Cloud sensor-history pilots, five simulated pipe leaks, evaluation seed 0,
+  8,000 context rows seed 1001, forecasts 0/10/20/30 s after observation, top 3:
+  centroid source forward / A spatial / B time / C sensors Brier 0.05806 /
+  0.04173 / 0.04006 / 0.03609 and recall 0.52153 / 0.46411 / 0.45096 / 0.54306;
+  Rayan source and rate Brier 0.02786 / 0.03291 / 0.03468 / 0.03499 and recall
+  0.76435 / 0.50000 / 0.49163 / 0.48804. False-positive rates centroid 0.02092 /
+  0.01363 / 0.00803 / 0.01131, Rayan 0.00951 / 0.00475 / 0.00792 / 0.00655.
+  Hazard median seconds centroid 0.00247 / 2.28886 / 2.19408 / 3.12874; Rayan
+  0.00239 / 2.39598 / 2.36941 / 2.79001. Immediate replay exposed routes
+  centroid 0/5 / 1/5 / 1/5 / 1/5, Rayan 0/5 for all. Quoted credits centroid
+  0 / 50,000 / 50,000 / 50,000; Rayan 0 / 50,000 / 50,000 / 50,000 plus
+  40,000 shared source calls. Rayan source activated for 4/5 evaluation cases;
+  the first uses a pipe prior. The five cases cannot prove redundancy or
+  establish safety. Guard amounts are quotes; timings omit source and routing.
+- Sensor-history offline pilot: five pipe-plant leaks, seed 0, 640 shared context
+  rows seed 1001, centroid source, simulated alarm at leak start, open floor,
+  forecast horizons 0/10/20/30 s. Forward vs offline k-NN spatial A / time B /
+  sensor C toxic Brier 0.05806 / 0.07700 / 0.07679 / 0.06681, recall at 0.5
+  0.52153 / 0.72847 / 0.47608 / 0.35646, false-positive rate 0.02092 / 0.10207 /
+  0.10366 / 0.03339; median hazard seconds 0.0016 / 0.1086 / 0.0889 / 0.1849.
+  All route replays had 0/5 exposed. All used 0 cloud credits; outcomes are
+  correlated and this small pilot cannot establish a general result. A/B/C used
+  exactly the same generated context rows and evaluation observations.
 - Added `hazard/RESULTS_GUIDE.md` and a credit-free plotting script to explain
   the recorded experiments and reproduce nine presentation figures. The plots
   use previously documented aggregate results; they are not new measurements.
@@ -107,14 +132,15 @@ Only Ahmad's agent edits this file. Update it before every PR.
 
 ## Needs
 
-- Integrate Steven's pipe, live evacuation and sync-check PRs when merged; rerun
-  with Rayan's early-alarm, pipe-prior-aware source locator and its rate estimates.
+- Expand the Rayan-source sensor-history pilot beyond five simulated cases and
+  one plant before drawing a general conclusion about its additional value.
 - Validate early-alarm accuracy and route outcomes with independent simulation,
   drift, sensor faults, varied plants and unknown real leak-start times; measure
   actual source + hazard + route latency with the selected deployment backend.
 - Review whether to keep the optional source-mass and path features after looking
   at their quality, runtime and limitations; defaults have not been changed.
-- Rayan's current source locator supplies no rate quantiles; hazard falls back to 1.0.
+- Earlier centroid-based comparisons used the rate fallback 1.0; the new
+  Rayan-source pilot used his estimated rate quantiles.
 - Pipeline scoring combines toxic and fire as independent probabilities, although
   fire is a subset of toxic under the current thresholds; this can overstate harm.
 

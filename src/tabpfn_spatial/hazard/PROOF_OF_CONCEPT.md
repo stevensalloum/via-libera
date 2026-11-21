@@ -6,6 +6,8 @@ been run unless explicitly identified as results.
 
 For a presentation-friendly explanation and reproducible figures, see
 [RESULTS_GUIDE.md](RESULTS_GUIDE.md).
+For the optional sensor-history ablation and its offline pilot, see
+[SENSOR_HISTORY.md](SENSOR_HISTORY.md).
 
 ## Purpose and scope
 
