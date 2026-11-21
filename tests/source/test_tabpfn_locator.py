@@ -1,10 +1,12 @@
 import numpy as np
 import pytest
 
-from tabpfn_spatial.core.models import BaselineClassifier
+from tabpfn_spatial.core.dist import QuantileDist
+from tabpfn_spatial.core.models import BaselineClassifier, BaselineRegressor
 from tabpfn_spatial.sim import Factory, Scenario, readings
 from tabpfn_spatial.source import TabPFNLocator, localisation_error
 from tabpfn_spatial.source.features import alarm_time
+from tabpfn_spatial.source.tabpfn_locator import prior_rate_quantiles
 
 WS = (0.0, 5.0, 10.0, 20.0)
 
@@ -19,6 +21,16 @@ class _CountingClassifier(BaselineClassifier):
         return super().predict_proba(X)
 
 
+class _CountingRegressor(BaselineRegressor):
+    """k-NN baseline regressor that counts predict_dist calls."""
+
+    calls = 0
+
+    def predict_dist(self, X: np.ndarray) -> QuantileDist:
+        type(self).calls += 1
+        return super().predict_dist(X)
+
+
 @pytest.fixture(scope="module")
 def factory() -> Factory:
     return Factory.default()
@@ -26,9 +38,11 @@ def factory() -> Factory:
 
 @pytest.fixture(scope="module")
 def fitted(factory: Factory) -> TabPFNLocator:
-    """One shared fit (k-NN stand-in, no network)."""
-    _CountingClassifier.calls = 0
-    return TabPFNLocator(classifier=_CountingClassifier(), n_train=250, ws=WS).fit(factory)
+    """One shared fit (k-NN stand-ins, no network)."""
+    _CountingClassifier.calls = _CountingRegressor.calls = 0
+    return TabPFNLocator(
+        classifier=_CountingClassifier(), regressor=_CountingRegressor(), n_train=250, ws=WS
+    ).fit(factory)
 
 
 def _sites(f: Factory, n: int, seed: int) -> np.ndarray:
@@ -82,9 +96,9 @@ def test_locate_many_is_one_batched_call(factory: Factory, fitted: TabPFNLocator
         _after_alarm(factory, int(i), int(i), w)[1]
         for i, w in zip(_sites(factory, 3, 1), (0, 5, 20), strict=True)
     ]
-    before = _CountingClassifier.calls
+    before = _CountingClassifier.calls, _CountingRegressor.calls
     many = fitted.locate_many(factory, rs)
-    assert _CountingClassifier.calls == before + 1
+    assert (_CountingClassifier.calls, _CountingRegressor.calls) == (before[0] + 1, before[1] + 1)
     for r, est in zip(rs, many, strict=True):
         np.testing.assert_allclose(est.prob, fitted.locate(factory, r).prob)
 
@@ -101,3 +115,43 @@ def test_dead_sensor_does_not_crash(factory: Factory, fitted: TabPFNLocator) -> 
     values[3] = np.nan
     dead = type(r)(r.positions, r.times, values, r.wind)
     _valid(factory, fitted.locate(factory, dead).prob)
+
+
+# ---------------------------------------------------------------- leak size (rate) --
+def _valid_rate(est) -> None:
+    lv, q = np.asarray(est.rate_levels), np.asarray(est.rate)
+    assert lv.shape == q.shape and len(lv) >= 3
+    assert np.all(np.diff(lv) > 0) and lv[0] > 0 and lv[-1] < 1
+    assert np.all(q > 0) and np.all(np.diff(q) >= 0)
+
+
+def test_locate_also_gives_leak_size_quantiles(factory: Factory, fitted: TabPFNLocator) -> None:
+    _valid_rate(fitted.locate(factory, _after_alarm(factory, int(_sites(factory, 1, 4)[0]), 4)[1]))
+
+
+def test_before_any_alarm_the_size_is_the_prior(factory: Factory, fitted: TabPFNLocator) -> None:
+    sc = Scenario(factory.leak_sites[0], 1.0, np.array([0.5, 0.0]))
+    est = fitted.locate(factory, readings(factory, sc, 0.0, np.random.default_rng(0)))
+    lv, q = prior_rate_quantiles(est.rate_levels)
+    np.testing.assert_allclose(est.rate, q)
+    assert np.isclose(np.interp(0.5, lv, q), 1.0)  # log-uniform 0.5-2 has median 1
+
+
+def test_bigger_leak_gives_bigger_size_estimate(factory: Factory, fitted: TabPFNLocator) -> None:
+    site = factory.leak_sites[int(_sites(factory, 1, 8)[0])]
+    med = []
+    for rate in (0.55, 1.9):
+        sc = Scenario(site, rate, np.array([0.4, 0.3]))
+        full = readings(factory, sc, 60.0, np.random.default_rng(3))
+        r = readings(
+            factory, sc, alarm_time(full.times, full.values) + 20.0, np.random.default_rng(3)
+        )
+        est = fitted.locate(factory, r)
+        med.append(np.interp(0.5, est.rate_levels, est.rate))
+    assert med[1] > med[0]
+
+
+def test_size_can_be_switched_off(factory: Factory) -> None:
+    loc = TabPFNLocator(backend="baseline", n_train=60, ws=WS, estimate_rate=False).fit(factory)
+    est = loc.locate(factory, _after_alarm(factory, int(_sites(factory, 1, 2)[0]), 2)[1])
+    assert est.rate is None and est.rate_levels is None
