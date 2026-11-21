@@ -24,6 +24,7 @@ leak-demo = "tabpfn_spatial.pipeline:main"
 sim-viz = "tabpfn_spatial.sim.viz:main"
 evac-live = "tabpfn_spatial.evac.viewer:main"
 evac-timing = "tabpfn_spatial.evac.timing:main"
+sync-check = "tabpfn_spatial.sync:main"
 
 [project.optional-dependencies]
 local = [
