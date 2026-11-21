@@ -2,6 +2,14 @@
 
 Newest first. Each entry: date, decision, why, alternatives considered.
 
+## 2026-11-21: AGENTS.md as the single rulebook
+
+- **Decision:** team rules live in `AGENTS.md`; `CLAUDE.md` only imports it (`@AGENTS.md`).
+  `.gitattributes` forces LF line endings; torch device is chosen at runtime.
+- **Why:** the team uses Claude Code and Codex (which reads `AGENTS.md`), on macOS and Windows.
+  One file avoids drift; LF keeps `ruff format --check` stable across OSes.
+- **Alternatives:** two copies of the rules (drift); a symlink (breaks on Windows checkouts).
+
 ## 2026-11-21: Protected main, squash merges
 
 - **Decision:** `main` requires a PR and a passing, up-to-date `ruff + pytest` check,

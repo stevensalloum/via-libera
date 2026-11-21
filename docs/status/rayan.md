@@ -1,6 +1,6 @@
 # Status: Rayan (@RayanElKhoury)
 
-Only Rayan's Claude edits this file. Update it before every PR.
+Only Rayan's agent edits this file. Update it before every PR.
 
 ## Doing
 
