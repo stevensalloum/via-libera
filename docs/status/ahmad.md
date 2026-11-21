@@ -4,16 +4,120 @@ Only Ahmad's agent edits this file. Update it before every PR.
 
 ## Doing
 
-- setting up everything
+- Hazard predictor (#19): adapt to early alarms and review source selection,
+  geometry and the pipe-based integration with Ahmad. Steven's PR stack is not
+  yet merged into this branch. The results are preliminary simulation results.
 
 ## Done
 
-- 
+- Added `hazard/RESULTS_GUIDE.md` and a credit-free plotting script to explain
+  the recorded experiments and reproduce nine presentation figures. The plots
+  use previously documented aggregate results; they are not new measurements.
+- In a temporary checkout of Steven's PR #28 stack (head `d124666`), ran the
+  `sync-check` CLI with `--hazard tabpfn_spatial.hazard:TabPFNHazardPredictor`,
+  offline backend, default centroid source: 24/24 cases passed hard checks across
+  two plants, four decision times and three seeds; forward baseline is the CLI's
+  reference and does not use cloud credits. The two warnings are that the centroid
+  source does not keep 99% probability on pipes and supplies no rate. The offline
+  k-NN query chunk was reduced to 128 for memory; its timing is not a cloud test.
+- Open-cell query pilot: five paired early-alarm pipe leaks, seed 0, same centroid
+  source, 8,000 context rows seed 1001. Full-grid vs open-cell cloud Brier 0.04198
+  vs 0.04198, source + hazard + one-plan median 3.6796 vs 3.4496 s; forward
+  Brier 0.05395 and median 0.0082 s. Each cloud option exposed 1/5 people, as did
+  forward and nearest exit. Largest cell probability difference 6e-17; full vs
+  open queries 23,400 vs 20,085 rows. Credits 50,000 vs 50,000; forward 0. The
+  five-case sample is too small to establish speed or accuracy benefits.
+- Repeated the same 30 pipe-leak cases with a first-route hybrid replay: baseline
+  vs cloud toxic Brier 0.07186 vs 0.05731 overall and 0.06239 vs 0.04352 for the
+  first 30 s. Source + hazard + one-plan median 0.0066 vs 3.9187 s, p95 0.0091 vs
+  4.9136 s. Exposed: nearest 4/30, baseline 4/30, cloud 2/30, hybrid 1/30; mean
+  harmful seconds 0.87, 1.17, 0.47 and 0.33 respectively. Model calls start from
+  the same readings; hybrid switches from nearest to baseline to the cloud route.
+  This is simulated replay, not an integrated live feature. Paired Brier, latency
+  and exposure baselines are above; repeat used 300,000 cloud credits vs 0 for
+  baseline. A separate 10-case hybrid pilot used 100,000; all four policies had
+  0/10 exposed, so it did not distinguish routes. Details and limitations below.
+- Early-alarm pipe comparison: 30 paired default-plant leaks, evaluation seed 0,
+  simulated detector median alarm 10 s, centroid source for both, hazard context
+  seed 1001, 8,000 rows, noisy wind, sampled estimated sources, top 3 candidates,
+  open-floor toxic outcomes over 0-120 s after alarm. Forward baseline vs cloud
+  TabPFN toxic Brier 0.07186 vs 0.05731, ECE 0.07186 vs 0.00645, AUC 0.79755 vs
+  0.94516. Measured source + hazard + one-plan median 0.0100 vs 3.8503 s, p95
+  0.0172 vs 5.3120 s. One-person route replay: 4/30 vs 3/30 people exposed,
+  mean harmful seconds 1.17 vs 0.50; nearest exit 4/30 and 0.87 s. Delays
+  rounded up to whole seconds. Forward uses 0 credits, cloud 300,000; an earlier
+  three-case pilot used another 30,000. Timing excludes model setup and uses the
+  centroid, not Rayan's locator. The centroid does not apply the pipe prior.
+  One simulated plant and correlated cells/times; no real-world claim. Tested in
+  a temporary copy of Steven's unmerged PR #28 stack (head `d124666`).
+- Cache/Fast experiment: 5 default-factory cases, seed 0, source maps from Rayan,
+  8,000 context rows seed 1001, top 3, open-floor toxic outcomes. Forward baseline
+  Brier 0.04405; v3.5 / v3.5 cached / v3.5-Fast / Fast cached Brier 0.07029 /
+  0.07034 / 0.06827 / 0.06825, median hazard seconds 3.65 / 4.68 / 2.74 / 4.32,
+  credits per forecast 10,000 / 30,000 / 10,000 / 30,000 (forward 0 credits).
+  Cached forecasts needed three requests due to the server's 10,000-row limit.
+  Successful comparison cost 400,000 credits; five cases and variable setup time
+  cannot establish a general latency or quality ranking. Cache and non-cache
+  used different batching, so observed output differences cannot be attributed.
+- Paired geometry experiment, 30 default-factory episodes, evaluation seed 0,
+  Rayan source branch `331bbe3` (context seed 12345), hazard context seed 1001,
+  8,000 rows, top 3, open-floor toxic outcomes, cloud TabPFN: forward baseline
+  vs original vs optional path features Brier 0.04638 / 0.05832 / 0.05600; ECE
+  0.04638 / 0.03397 / 0.03450; AUC 0.91150 / 0.95749 / 0.96200; provisional mean
+  exposed 4.63 / 4.20 / 4.27 vs standard plan 7.03. Hazard calls cost 0 /
+  300,000 / 300,000 credits; source-map batch cost an additional 10,000 vs 0
+  for weighted centroid. Path minus original Brier -0.00233, exploratory paired
+  bootstrap 95% interval -0.00413 to -0.00077. Same simulator and one factory;
+  model version not pinned and route risk combination remains provisional.
+- Source-selection comparison on the same 30 scenarios: centroid vs Rayan locator
+  top-3 retained mass 7.06% vs 91.34% and true-source coverage 1/30 vs 28/30.
+  With Rayan's maps, forward top 1 vs TabPFN top 3 / top 10 / adaptive 90%
+  yielded toxic Brier 0.04638 vs 0.05832 / 0.05830 / 0.05841. The three TabPFN
+  variants shared one top-10 batch per episode, 557,580 quoted credits total
+  vs 0 for forward; adaptive cap 10 bound in 0/30 cases. Exploratory paired
+  intervals for selection differences include zero. Results are simulation-only.
+- Paired backend comparison: 5 default-factory episodes, evaluation seed 0,
+  context seed 12345, 8,000 context rows, top 3 source cells, weighted-centroid
+  locator, open-floor toxic outcomes. Forward simulation vs offline k-NN vs cloud
+  TabPFN: Brier 0.09081 / 0.10857 / 0.08850; ECE 0.09081 / 0.09152 / 0.08216;
+  AUC 0.75245 / 0.80376 / 0.80814; cloud credits 0 / 0 / 50,000. Hazard call
+  times were 0.01-0.02 / 4.16-4.45 / 3.49-4.98 s respectively; offline k-NN
+  used a smaller query chunk for memory. Small simulated sample, cloud version
+  and fit mode not explicitly selected; not a general performance claim.
+- Offline diagnostics, 0 cloud credits for both conditions: a constructed pair of
+  14 m x 10 m layouts produced identical target features but simulator concentration
+  0.13408 vs 0.00882 at 120 s (near vs far door, threshold 0.1). Separately, on 30
+  default-factory episodes, seed 0, toxic Brier on open floor was 0.09288 vs
+  0.07345 for forward-simulation mixtures using top 3 vs 90% retained source mass
+  (3 vs 83.4 mean candidate cells). The latter won 28/30 vs 2/30 episodes. Neither
+  diagnostic evaluates TabPFN or validates the simulator against real data.
+- Offline source-map diagnostic, default factory, 30 episodes, seed 0,
+  weighted-centroid baseline, 60-second readings and 0 cloud credits: top 3 cells
+  retained 7.06% mean probability vs at least 90% for an adaptive selection;
+  the true simulated source was included in 1/30 vs 22/30 cases. The 90% selection
+  used 83.4 cells on average vs 3. This is a source-map diagnostic, not a hazard
+  benchmark; Rayan's TabPFN source locator was not evaluated.
+- Paired held-out benchmark, default factory, 3 episodes, evaluation seed 0,
+  training seed 42, cloud backend, 100 simulated training leaks, 20 sampled cells,
+  4 forecast times, top 3 source cells: harm Brier 0.05663 vs forward-simulation
+  baseline 0.05907; toxic Brier 0.05639 vs 0.05907; toxic ECE 0.05637 vs 0.05907;
+  toxic AUC 0.85534 vs 0.79890. The cloud calls used 30,000 credits vs 0 for the
+  offline baseline (quoted and consistent with account usage). These are the same
+  episode scores used by `pipeline.evaluate`, calculated on paired episodes.
 
 ## Needs
 
-- 
+- Integrate Steven's pipe, live evacuation and sync-check PRs when merged; rerun
+  with Rayan's early-alarm, pipe-prior-aware source locator and its rate estimates.
+- Validate early-alarm accuracy and route outcomes with independent simulation,
+  drift, sensor faults, varied plants and unknown real leak-start times; measure
+  actual source + hazard + route latency with the selected deployment backend.
+- Review whether to keep the optional source-mass and path features after looking
+  at their quality, runtime and limitations; defaults have not been changed.
+- Rayan's current source locator supplies no rate quantiles; hazard falls back to 1.0.
+- Pipeline scoring combines toxic and fire as independent probabilities, although
+  fire is a subset of toxic under the current thresholds; this can overstate harm.
 
 ## Blocked
 
-- 
+- None.

@@ -20,17 +20,43 @@ DIFFUSIVITY = 0.8  # m^2/s, turbulent mixing indoors
 
 @dataclass(frozen=True)
 class Scenario:
-    """One leak: ``source`` (2,) metres, ``rate`` units/s, ``wind`` (2,) m/s (u, v)."""
+    """One leak: ``source`` (2,) metres, ``rate`` units/s, ``wind`` (2,) m/s (u, v) at t = 0.
+
+    ``drift``: random walk of the wind direction in rad per sqrt(second) (0 = steady);
+    ``seed`` makes the walk reproducible. Speed stays constant.
+    """
 
     source: np.ndarray
     rate: float
     wind: np.ndarray
+    drift: float = 0.0
+    seed: int = 0
+
+
+_WIND_STEP = 1.0  # seconds between wind direction updates
+
+
+def wind_at(scenario: Scenario, times: np.ndarray) -> np.ndarray:
+    """(T, 2) wind vector at ``times`` (seconds): ``wind`` rotated by the drift walk. O(t_max)."""
+    if scenario.drift < 0:
+        raise ValueError("drift must be >= 0")
+    times = np.asarray(times, dtype=float)
+    k = np.floor(times / _WIND_STEP).astype(int)
+    steps = int(k.max(initial=0)) + 1
+    walk = np.random.default_rng(scenario.seed).standard_normal(steps)
+    angle = np.concatenate([[0.0], np.cumsum(walk[1:])]) * scenario.drift * np.sqrt(_WIND_STEP)
+    a = angle[k]
+    u, v = scenario.wind
+    return np.column_stack([u * np.cos(a) - v * np.sin(a), u * np.sin(a) + v * np.cos(a)])
 
 
 def _divergence(c: np.ndarray, open_: np.ndarray, wind: np.ndarray, dx: float, d: float):
     """Net inflow per cell (B, ny, nx) from advection and diffusion fluxes."""
-    cp = np.pad(c, ((0, 0), (1, 1), (1, 1)))
-    op = np.pad(open_, 1, constant_values=1.0)
+    b, ny, nx = c.shape
+    cp = np.zeros((b, ny + 2, nx + 2))  # zero gas outside the hall (np.pad is ~2x slower)
+    cp[:, 1:-1, 1:-1] = c
+    op = np.ones((ny + 2, nx + 2))
+    op[1:-1, 1:-1] = open_
     out = np.zeros_like(c)
     for axis, vel in ((2, wind[:, 0]), (1, wind[:, 1])):
         if axis == 2:
@@ -52,14 +78,15 @@ def simulate(
     """Concentration fields (B, T, ny, nx) at the requested times (seconds, ascending)."""
     times = np.asarray(times, dtype=float)
     b = len(scenarios)
-    wind = np.array([s.wind for s in scenarios], dtype=float).reshape(b, 2)
     rate = np.array([s.rate for s in scenarios], dtype=float)
     src = np.array([factory.cell_of(s.source) for s in scenarios]).reshape(b, 2)
     if factory.walls[src[:, 0], src[:, 1]].any():
         raise ValueError("leak source inside a solid cell (wall or machine)")
+    grid_t = np.arange(0.0, times.max(initial=0.0) + _WIND_STEP, _WIND_STEP)
+    winds = np.stack([wind_at(s, grid_t) for s in scenarios], axis=1)  # (steps, B, 2)
     open_ = (~factory.walls).astype(float)
     dx = factory.cell
-    speed = np.abs(wind).sum(axis=1).max(initial=0.0)
+    speed = np.sqrt(2) * np.linalg.norm(winds, axis=-1).max(initial=0.0)  # rotation bound
     dt = 0.9 / (4 * d / dx**2 + speed / dx)
     c = np.zeros((b, factory.ny, factory.nx))
     out = np.zeros((b, len(times), factory.ny, factory.nx))
@@ -67,6 +94,7 @@ def simulate(
     for k, target in enumerate(times):
         while t < target - 1e-9:
             h = min(dt, target - t)
+            wind = winds[min(int(t / _WIND_STEP), len(grid_t) - 1)]
             c += h * _divergence(c, open_, wind, dx, d)
             c[idx, src[:, 0], src[:, 1]] += h * rate
             c *= open_
