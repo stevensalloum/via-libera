@@ -45,9 +45,9 @@ docs/
   status/        per-person status files
 ```
 
-Contribution rules (branches, PRs, ownership, code style) are in [CLAUDE.md](CLAUDE.md).
+Contribution rules (branches, PRs, ownership, code style) are in [AGENTS.md](AGENTS.md).
 
 ## Note on tooling
 
-We used AI coding assistants (Claude Code) while building this project. All code was
+We used AI coding assistants (Claude Code, Codex) while building this project. All code was
 reviewed, tested and integrated by the team.

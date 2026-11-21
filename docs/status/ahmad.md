@@ -1,6 +1,6 @@
 # Status: Ahmad (@Asorus)
 
-Only Ahmad's Claude edits this file. Update it before every PR.
+Only Ahmad's agent edits this file. Update it before every PR.
 
 ## Doing
 
