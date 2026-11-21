@@ -115,3 +115,28 @@ def test_live_loop_accepts_the_real_baselines() -> None:
     fr = next(fr for fr in frames if fr.replanned)
     assert isinstance(fr.source, SourceEstimate) and isinstance(fr.hazard, HazardMap)
     assert isinstance(fr.readings, SensorReadings)
+
+
+# ----------------------------------------------------------------------- latency --
+def test_with_latency_people_walk_to_the_nearest_exit_until_the_plan_arrives() -> None:
+    at = {fr.t: fr.walkers for fr in _run(latency=8.0)}
+    assert at[21.0]["live"].exit_index == at[21.0]["nearest"].exit_index == 0
+    assert at[21.0]["live"].pos.tolist() != [5.0, 15.0]  # already walking
+    assert at[27.0]["once"].exit_index == 0  # plan not in yet
+
+
+def test_with_latency_people_can_wait_for_the_plan_instead() -> None:
+    frames = _run(latency=8.0, before_plan="wait")
+    at = {fr.t: fr.walkers for fr in frames}
+    np.testing.assert_allclose(at[27.0]["live"].pos, [5.0, 15.0])  # waiting
+    assert at[27.0]["nearest"].pos.tolist() != [5.0, 15.0]  # the conventional plan walks
+    assert at[29.0]["live"].exit_index != 0  # the plan from 20 s data landed at 28 s
+    assert at[29.0]["once"].exit_index == at[29.0]["live"].exit_index
+    with pytest.raises(ValueError, match="before_plan"):
+        _run(before_plan="run")
+
+
+def test_latency_costs_exposure_on_a_leak_where_the_nearest_exit_is_gassed() -> None:
+    fast = _run()[-1].walkers["live"]
+    slow = _run(latency=20.0)[-1].walkers["live"]
+    assert slow.dose >= fast.dose
