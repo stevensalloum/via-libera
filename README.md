@@ -41,8 +41,9 @@ pytest
    `git switch -c feat/<topic>`
 3. Test first, then code. Before pushing:
    `uv run ruff check . && uv run ruff format --check . && uv run pytest`
-4. Update `docs/status/<name>.md`, commit (`feat: ...`), push, then
-   `gh pr create --fill` with `Closes #<issue>` in the description.
+4. Update `docs/status/<name>.md`, commit (`feat: ...`), push, then `gh pr create`
+   and fill in the template: `Closes #<issue>`, What, Why, How tested. Agents pass it
+   with `--title` and `--body`; do not use `--fill`, which drops the template.
 5. After Steven merges: `git switch main && git pull && git branch -d <branch>`
 
 ## How to run
