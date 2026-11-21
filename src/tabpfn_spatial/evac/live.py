@@ -43,6 +43,7 @@ from tabpfn_spatial.sim import (
     sensor_history,
     simulate,
 )
+from tabpfn_spatial.sim.plume import DIFFUSIVITY
 
 POLICIES = ("live", "once", "nearest")
 FORECAST_STEP = 10.0  # seconds between forecast maps
@@ -249,6 +250,7 @@ class PipelineFrame(Frame):
     cycles: tuple[Cycle, ...] = ()
     phase: str = ""
     running: Cycle | None = None
+    routes: tuple[np.ndarray, ...] = ()  # the replanned person's route as each run landed
 
 
 def _rate(est: SourceEstimate) -> float:
@@ -286,6 +288,9 @@ def run_pipeline(
     rng: np.random.Generator | None = None,
     sample_every: float = 5.0,
     fixed_latency: dict[str, float] | None = None,
+    diffusivity: float = DIFFUSIVITY,
+    dropout: float = 0.0,
+    stuck: float = 0.0,
 ) -> Iterator[PipelineFrame]:
     """Yield a frame every ``dt`` s; the models run back to back from the alarm.
 
@@ -295,19 +300,23 @@ def run_pipeline(
     so on for ``max_runs`` runs (after that, everyone is assumed out or on a final route).
     Time spent in the models is their measured wall time (cloud or offline), unless
     ``fixed_latency`` = {"locate": s, "predict": s} pins it (tests, reproducible studies).
+    ``diffusivity``, ``dropout``, ``stuck`` stress the truth and the sensors (``sim.CONDITIONS``;
+    wind drift lives in the scenario); the models keep their own assumptions.
     """
     if max_runs < 1:
         raise ValueError("max_runs must be >= 1")
     planner = planner or RiskAwarePlanner()
     rng = rng or np.random.default_rng()
     times = np.arange(0.0, t_max + dt / 2, dt)
-    fields = simulate(factory, [scenario], times)[0]
+    fields = simulate(factory, [scenario], times, d=diffusivity)[0]
     toxic, fire = hazard_from_fields(factory, fields)
     harm = toxic | fire
     if t_alarm is None:
         t_alarm = first_alarm(factory, times, fields, every=sample_every)
     people = {p: Walker(np.asarray(start, float).copy(), planner.speed) for p in POLICIES}
-    history = sensor_history(factory, scenario, t_max, rng, every=sample_every)
+    history = sensor_history(factory, scenario, t_max, rng, every=sample_every,
+                             diffusivity=diffusivity, dropout=dropout, stuck=stuck)  # fmt: skip
+    routes: list[np.ndarray] = []
     started: list[Cycle] = []
     landed: list[Cycle] = []
     running: Cycle | None = None
@@ -324,6 +333,8 @@ def run_pipeline(
             if people["live"].out_at is None:
                 options = exit_options(factory, planner, people["live"].pos, running.hazard, t)
             _steer(people["live"], factory, planner, running.hazard, t)
+            if people["live"].path is not None:
+                routes.append(people["live"].path.copy())
             if not landed:
                 _steer(people["once"], factory, planner, running.hazard, t)
             landed.append(running)
@@ -352,6 +363,7 @@ def run_pipeline(
             t, fields[k], harm[k], snap, r, last.source if last else None,
             last.hazard if last else None, options, bool(landed) and landed[-1].t_land == t,
             alarm, t_alarm, tuple(landed), _phase(t, alarm, running, landed, max_runs), running,
+            tuple(routes),
         )  # fmt: skip
         for w in people.values():
             if w.out_at is None:
