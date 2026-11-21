@@ -26,6 +26,7 @@ evac-live = "tabpfn_spatial.evac.viewer:main"
 evac-timing = "tabpfn_spatial.evac.timing:main"
 sync-check = "tabpfn_spatial.sync:main"
 evac-crowd = "tabpfn_spatial.evac.crowd_study:main"
+evac-crowd-live = "tabpfn_spatial.evac.crowd_viewer:main"
 
 [project.optional-dependencies]
 local = [
