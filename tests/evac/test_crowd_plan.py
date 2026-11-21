@@ -85,3 +85,13 @@ def test_run_crowd_scores_everyone_on_the_true_gas_and_is_deterministic() -> Non
     assert m["harm_s_mean"] <= near["harm_s_mean"] + 1e-9
     with pytest.raises(ValueError, match="planner"):
         run_crowd(F, prep, xy, "fastest", P)
+
+
+def test_detour_weight_makes_ccrp_divert_fewer_people() -> None:
+    xy = np.repeat([[9.0, 19.0]], 150, axis=0) + np.random.default_rng(0).uniform(-3, 3, (150, 2))
+    moved = []
+    for w in (1.0, 2.0, 50.0):
+        crowd = Crowd(F, xy, P)
+        assign("ccrp", F, crowd, ZERO, 0.0, detour_weight=w)
+        moved.append(int((crowd.exit_index != 0).sum()))
+    assert moved[0] > moved[1] > moved[2] >= 0
