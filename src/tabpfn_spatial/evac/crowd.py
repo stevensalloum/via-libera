@@ -80,6 +80,7 @@ class Crowd:
         self.out_at = np.full(n, np.nan)
         self.dose = np.zeros(n)
         self.harm_s = np.zeros(n)
+        self.queued_s = np.zeros(n)  # seconds ready to move but blocked (door or crowd)
         self.occupancy = np.zeros(f.walls.shape, dtype=int)
         np.add.at(self.occupancy, (self.cells[:, 0], self.cells[:, 1]), 1)
         self.max_occupancy = int(0.9 * p.rho_max * f.cell**2)
@@ -131,10 +132,13 @@ class Crowd:
                 self._exit_budget[e] -= 1
                 self.occupancy[here] -= 1
                 self.out_at[i] = t + dt
+            else:
+                self.queued_s[i] += dt
             return
         nxt = tuple(route[1])
         if self._budget[here] < 1 or self.occupancy[nxt] >= self.max_occupancy:
             self.wait[i] = 0.0  # blocked: queue, no speed credit
+            self.queued_s[i] += dt
             return
         self._budget[here] -= 1
         self.occupancy[here] -= 1

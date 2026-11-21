@@ -51,6 +51,8 @@ def test_an_exit_door_passes_its_capacity_per_second() -> None:
     _walk_all(crowd)
     rate = P.specific_flow * P.door_m
     assert crowd.out_at.max() == pytest.approx(n / rate, abs=2.0)
+    assert crowd.queued_s.max() == pytest.approx(n / rate, abs=2.0)  # the last one queued
+    assert crowd.queued_s.min() == 0.0
 
 
 def test_cells_never_hold_more_than_their_capacity() -> None:

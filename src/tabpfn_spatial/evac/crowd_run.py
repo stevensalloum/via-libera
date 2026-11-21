@@ -99,9 +99,7 @@ def run_crowd(
         raise ValueError(f"planner must be one of {PLANNERS}, not {planner!r}")
     crowd = Crowd(f, positions, params)
     replans = {round(float(t)): d for t, d in zip(prep.replan_times, prep.danger, strict=True)}
-    exit_cells = np.array([f.cell_of(xy) for xy in f.exits])
     out = CrowdResult({})
-    queue = 0
     for k, t in enumerate(prep.times):
         if round(float(t)) in replans and crowd.active.any():
             assign(planner, f, crowd, replans[round(float(t))], float(t))
@@ -109,12 +107,11 @@ def run_crowd(
         if record_every and k % record_every == 0:
             out.frames.append(_snapshot(float(t), k, crowd))
         crowd.step(float(t))
-        queue = max(queue, int(crowd.occupancy[exit_cells[:, 0], exit_cells[:, 1]].max()))
-    out.metrics = _metrics(crowd, prep, queue)
+    out.metrics = _metrics(crowd, prep)
     return out
 
 
-def _metrics(crowd: Crowd, prep: Prepared, queue: int) -> dict[str, float]:
+def _metrics(crowd: Crowd, prep: Prepared) -> dict[str, float]:
     n = len(crowd.out_at)
     done = np.sort(crowd.out_at[~np.isnan(crowd.out_at)])
     k95 = int(np.ceil(0.95 * n)) - 1
@@ -128,5 +125,6 @@ def _metrics(crowd: Crowd, prep: Prepared, queue: int) -> dict[str, float]:
         "harm_s_p95": float(np.percentile(crowd.harm_s, 95)),
         "exposed_pct": float(100 * (crowd.harm_s > 0).mean()),
         "dose_mean": float(crowd.dose.mean()),
-        "max_exit_queue": float(queue),
+        "queued_s_mean": float(crowd.queued_s.mean()),
+        "queued_s_p95": float(np.percentile(crowd.queued_s, 95)),
     }
