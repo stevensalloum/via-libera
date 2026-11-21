@@ -11,16 +11,39 @@ TabPFN for spatial awareness in robotics. Built at the Berlin AIxRobotics Hackat
 - Rayan ([@RayanElKhoury](https://github.com/RayanElKhoury))
 - Ahmad ([@Asorus](https://github.com/Asorus))
 
-## Setup
+## Setup (once per laptop)
 
-Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
+Requires Python 3.12+. Recommended: [uv](https://docs.astral.sh/uv/) (it installs Python 3.12
+itself if missing). Clone outside iCloud / OneDrive folders.
 
 ```bash
-git clone https://github.com/stevensalloum/tabpfn-spatial.git
+gh repo clone stevensalloum/tabpfn-spatial
 cd tabpfn-spatial
-uv sync
-cp .env.example .env   # then fill in any keys; .env is gitignored
+uv sync                       # creates .venv from uv.lock
+uv run pytest                 # expect all tests to pass
+cp .env.example .env          # Windows: copy .env.example .env ; fill in keys, never commit
 ```
+
+Without uv (plain pip), use `requirements.txt`, which mirrors `uv.lock`:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate     # Windows PowerShell: .venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+pip install -e . --no-deps
+pytest
+```
+
+## Daily flow
+
+1. Start of every work block: `git switch main && git pull`
+2. Pick your GitHub Issue (`gh issue list --assignee @me`) and branch from fresh main:
+   `git switch -c feat/<topic>`
+3. Test first, then code. Before pushing:
+   `uv run ruff check . && uv run ruff format --check . && uv run pytest`
+4. Update `docs/status/<name>.md`, commit (`feat: ...`), push, then
+   `gh pr create --fill` with `Closes #<issue>` in the description.
+5. After Steven merges: `git switch main && git pull && git branch -d <branch>`
 
 ## How to run
 
@@ -31,6 +54,17 @@ uv run ruff format .          # format
 ```
 
 Entry points for the demo will be added here.
+
+## Dependencies
+
+Add or change them only in a PR the integrator reviews:
+
+```bash
+uv add <package>              # updates pyproject.toml and uv.lock
+uv export --format requirements-txt --no-hashes --group dev --no-emit-project --quiet -o requirements.txt
+```
+
+CI fails if `requirements.txt` is out of sync with `uv.lock`.
 
 ## Repository layout
 

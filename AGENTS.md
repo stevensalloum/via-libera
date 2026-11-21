@@ -9,6 +9,8 @@ propose changes in your status file or a PR description instead.
 TabPFN for spatial awareness in robotics (Berlin AIxRobotics Hackathon, Prior Labs track).
 Python >= 3.12, package `tabpfn_spatial` under `src/`, tests under `tests/`.
 Environment: `uv sync` creates `.venv` with the dev tools. Run everything through `uv run`.
+`requirements.txt` mirrors `uv.lock` for pip users; regenerate it whenever dependencies
+change (command in README, "Dependencies"). Setup and daily flow: README.
 
 ## Ownership
 
@@ -19,7 +21,7 @@ Each person's agent stays inside its own folders unless the task (issue) says ot
 | Simulation and data | `src/tabpfn_spatial/data/` | `tests/data/` | TBD |
 | Models / TabPFN | `src/tabpfn_spatial/models/` | `tests/models/` | TBD |
 | Agent, visuals, demo | `src/tabpfn_spatial/demo/` | `tests/demo/` | TBD |
-| Shared (`pyproject.toml`, `AGENTS.md`, `CLAUDE.md`, `.claude/`, `.github/`, `src/tabpfn_spatial/__init__.py`, `docs/decisions.md`) | | | Steven (integrator) |
+| Shared (`pyproject.toml`, `uv.lock`, `requirements.txt`, `AGENTS.md`, `CLAUDE.md`, `.claude/`, `.github/`, `src/tabpfn_spatial/__init__.py`, `docs/decisions.md`) | | | Steven (integrator) |
 
 Shared interfaces (anything another area imports, plus dependencies in `pyproject.toml`)
 change only through a PR the integrator reviews. Say so in the PR description.
