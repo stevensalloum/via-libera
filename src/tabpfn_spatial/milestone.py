@@ -96,6 +96,15 @@ def _data(dst: Path) -> list[Path]:
                       ("scene_3d.json", "outputs/world/scene.json")]:  # fmt: skip
         if Path(src).exists():
             out.append(Path(shutil.copy(src, dst / name)))
+    world = Path("outputs/world")
+    if (world / "replay.json").exists():  # ready for: uv run world --keep --out <dst>/world
+        (dst / "world").mkdir(exist_ok=True)
+        for f in ("scene.json", "replay.json"):
+            out.append(Path(shutil.copy(world / f, dst / "world" / f)))
+    for src in ("outputs/crowd_tabpfn/ladder.png", "outputs/crowd/ladder.png"):
+        if Path(src).exists():
+            name = "team_models_vs_baselines.png" if "tabpfn" in src else "crowd_ladder.png"
+            out.append(Path(shutil.copy(src, dst.parent / "figures" / name)))
     return out
 
 
@@ -114,6 +123,12 @@ def _table(path: Path) -> str:
 
 def _readme(root: Path, name: str, files: list[Path]) -> Path:
     data = root / "data"
+    note = (
+        "**Read this first:** rows with models `tabpfn` ran the team's models with the offline "
+        "k-NN stand-in (`--backend baseline`) unless the run used `--backend cloud`: they test "
+        "that the parts fit together, not how good TabPFN is. `perfect` = true leak and true "
+        "future (upper bound); `baseline` = centroid locator + forward simulation.\n\n"
+    )
     tables = "\n\n".join(
         f"### {p.stem.replace('_', ' ')}\n\n{_table(p)}"
         for p in sorted(data.glob("*.json"))
@@ -143,7 +158,8 @@ Made {dt.date.today()} by `uv run milestone {name}`.
 
 ```bash
 cd ~/dev/tabpfn-spatial
-uv run world --replay --rung B --leak 500     # 3D replay (Record button saves a video)
+uv run world --keep --out {root}/data/world   # this milestone's 3D replay
+uv run world --replay --rung B --leak 500     # compute a fresh 3D replay (1-2 min)
 uv run world                                   # 3D factory only, walk through it
 uv run closed-loop --rung B --seed 500         # one emergency, every part, in the terminal
 uv run evac-crowd-live --rung D --seed 509     # 2D: three planners side by side
@@ -155,7 +171,7 @@ not in it), or record the screen with **Cmd+Shift+5** and drop the file in `vide
 
 ## Headline numbers
 
-{tables or "(run the studies first: uv run evac-crowd ...)"}
+{note + tables if tables else "(run the studies first: uv run evac-crowd ...)"}
 
 ## Files
 
