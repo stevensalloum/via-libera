@@ -19,4 +19,5 @@ def test_readme_indexes_files_and_tabulates_crowd_results(tmp_path: Path) -> Non
     text = _readme(tmp_path, "M1", [fig]).read_text()
     assert "# M1" in text and "`figures/a.png`" in text
     assert "| B | tabpfn | ccrp | 1.00 | 5.0 | 90 |" in text
-    assert "uv run world --replay" in text
+    assert "uv run world --replay" in text and "--keep --out" in text
+    assert "offline" in text  # the stand-in caveat travels with the numbers
