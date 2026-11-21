@@ -59,6 +59,18 @@ overall winner. The source-conditioned context improves Brier over the centroid
 context in all six incomplete groups; an independent, balanced run is needed
 before treating that as general evidence.
 
+| Test condition | Forward false-positive rate | Centroid context | Rayan context |
+| --- | ---: | ---: | ---: |
+| Standard | 0.01613 | 0.02866 | 0.01756 |
+| Changing wind | 0.02540 | 0.03408 | 0.02461 |
+| Sensor faults | 0.02656 | 0.02968 | 0.01907 |
+| Slower mixing | 0.02105 | 0.03016 | 0.02000 |
+| Faster mixing | 0.02089 | 0.03617 | 0.02798 |
+| Combined stress | 0.02895 | 0.03912 | 0.02938 |
+
+The false-positive rate is the fraction of non-toxic cell/time outcomes assigned
+a toxic probability of at least 0.5; it uses the same illustrative threshold.
+
 | Condition | Nearest exit exposed | Forward exposed | Centroid context exposed | Rayan context exposed |
 | --- | ---: | ---: | ---: | ---: |
 | Standard | 9/28 | 6/28 | 6/28 | 5/28 |
