@@ -29,7 +29,7 @@ import numpy as np
 
 from tabpfn_spatial.evac.crowd import CrowdParams, sample_workers
 from tabpfn_spatial.evac.crowd_plan import DETOUR_WEIGHT, PLANNERS
-from tabpfn_spatial.evac.crowd_run import prepare, run_crowd
+from tabpfn_spatial.evac.crowd_run import make_models, prepare, run_crowd
 from tabpfn_spatial.sim import Factory, sample_scenarios
 
 METRICS = ("harm_s_mean", "harm_s_p95", "exposed_pct", "out_95_s", "queued_s_mean",
@@ -75,14 +75,23 @@ RUNGS = (
 )  # fmt: skip
 
 
-def _job(args: tuple[Rung, int, str, float]) -> list[dict]:
+_FITTED: dict = {}  # (rung, backend) -> fitted TabPFN models, one fit per worker process
+
+
+def _job(args: tuple[Rung, int, str, float, str]) -> list[dict]:
     """All planners on one (rung, leak seed, models): same leak, alarm, maps and people."""
-    rung, seed, models, detour = args
+    rung, seed, models, detour, backend = args
     f = rung.plant()
     rng = np.random.default_rng(seed)
     sc = sample_scenarios(f, 1, rng)[0]
     people = sample_workers(f, rung.people, rng)
-    prep = prepare(f, sc, models, rung.t_max, rung.update_s, seed)
+    fitted = None
+    if models == "tabpfn":
+        key = (rung.name, backend)
+        if key not in _FITTED:
+            _FITTED[key] = make_models(f, sc, "tabpfn", backend)
+        fitted = _FITTED[key]
+    prep = prepare(f, sc, models, rung.t_max, rung.update_s, seed, fitted=fitted, backend=backend)
     params = CrowdParams(door_m=rung.door_m)
     return [
         {"rung": rung.name, "seed": seed, "models": models, "planner": p,
@@ -97,9 +106,10 @@ def run_ladder(
     models: Sequence[str] = ("perfect", "baseline"),
     workers: int = 1,
     detour_weight: float = DETOUR_WEIGHT,
+    backend: str = "baseline",
 ) -> list[dict]:
     """One row per rung x models x leak seed x planner, in that order."""
-    jobs = [(r, s, m, detour_weight) for r in rungs for m in models for s in seeds]
+    jobs = [(r, s, m, detour_weight, backend) for r in rungs for m in models for s in seeds]
     if workers > 1:
         with ProcessPoolExecutor(workers) as pool:
             parts = list(pool.map(_job, jobs))
@@ -140,7 +150,9 @@ def plot_ladder(rows: list[dict], path: Path) -> Path:
 
     agg = aggregate(rows)
     rungs = sorted({r["rung"] for r in rows})
-    model_rows = [m for m in ("perfect", "baseline") if any(r["models"] == m for r in rows)]
+    model_rows = [
+        m for m in ("perfect", "tabpfn", "baseline") if any(r["models"] == m for r in rows)
+    ]
     panels = [("harm_s_mean", "seconds in harmful gas per person"),
               ("exposed_pct", "% of people exposed"),
               ("out_95_s", "time until 95 % are out (s since leak)"),
@@ -223,7 +235,15 @@ def main() -> int:
     p.add_argument("--detour", type=float, default=DETOUR_WEIGHT, help="ccrp detour weight")
     p.add_argument("--workers", type=int, default=8)
     p.add_argument("--rungs", nargs="+", default=[r.name for r in RUNGS])
-    p.add_argument("--models", nargs="+", default=["perfect", "baseline"])
+    p.add_argument(
+        "--models",
+        nargs="+",
+        default=["perfect", "baseline"],
+        help="perfect, baseline, tabpfn (the team's models)",
+    )
+    p.add_argument(
+        "--backend", default="baseline", help="tabpfn models: baseline (offline) or cloud"
+    )
     p.add_argument("--out", type=Path, default=Path("outputs/crowd"))
     p.add_argument("--plot-only", action="store_true", help="redraw from results.json")
     a = p.parse_args()
@@ -233,7 +253,7 @@ def main() -> int:
         rows = json.loads(data.read_text())["rows"]
     else:
         seeds = range(a.first_seed, a.first_seed + a.leaks)
-        rows = run_ladder(rungs, seeds, a.models, a.workers, a.detour)
+        rows = run_ladder(rungs, seeds, a.models, a.workers, a.detour, a.backend)
         a.out.mkdir(parents=True, exist_ok=True)
         meta = {"rungs": [asdict(r) for r in rungs], "seeds": [seeds.start, seeds.stop],
                 "models": a.models, "detour_weight": a.detour}  # fmt: skip
