@@ -11,6 +11,7 @@ See [docs/brief.md](docs/brief.md). Run the whole pipeline: `uv run leak-demo`.
 
 | Command | What it shows |
 |---|---|
+| `uv run world` | The 3D factory in the browser: orbit, fly to machines, walk inside (http://127.0.0.1:8770) |
 | `uv run sim-viz` | The plant: machines, gas pipes, sensors, exits; gas spreading over time |
 | `uv run evac-live` | One person evacuated live from the detector alarm (click to move them) |
 | `uv run evac-crowd-live --rung B` | A whole crowd, three planners side by side (rungs A-E) |
