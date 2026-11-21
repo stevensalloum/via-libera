@@ -296,6 +296,33 @@ def save_story(f: Factory, cfg: Config, moments: list[float], path: Path) -> Pat
     return path
 
 
+def compare(f: Factory, cfg: Config, n: int) -> dict[str, dict[str, float]]:
+    """Run leaks ``cfg.seed .. cfg.seed + n - 1`` (random start each) and score each policy.
+
+    Returns per policy: ``exposed`` (people with any second in harm), ``harm_s`` (total
+    seconds in harm), ``mean_dose``; plus ``pre_alarm_harm_s`` (seconds in harm before
+    anyone could move, the same for every policy) and ``live_other_exit`` (runs where
+    replanning changed the exit). Cost: n runs of ``run_live``.
+    """
+    out = {p: {"exposed": 0.0, "harm_s": 0.0, "mean_dose": 0.0} for p in POLICIES}
+    pre = changed = 0.0
+    for s in range(cfg.seed, cfg.seed + n):
+        run = Config(s, None, cfg.t_alarm, cfg.update_s, cfg.t_max, cfg.drift, cfg.source,
+                     cfg.sigma, cfg.hazard)  # fmt: skip
+        _, _, frames = make_run(f, run)
+        for fr in frames:
+            if fr.t == cfg.t_alarm:
+                pre += fr.walkers["live"].harmful_s
+            last = fr
+        for p, w in last.walkers.items():
+            out[p]["exposed"] += w.harmful_s > 0
+            out[p]["harm_s"] += w.harmful_s
+            out[p]["mean_dose"] += w.dose / n
+        changed += last.walkers["live"].exit_index != last.walkers["once"].exit_index
+    out["all"] = {"pre_alarm_harm_s": pre, "live_other_exit": changed, "runs": float(n)}
+    return out
+
+
 def main() -> int:
     """CLI: ``uv run evac-live [--seed S] [--at X Y] [--update 5] [--gif out.gif]``."""
     p = argparse.ArgumentParser(description="Watch one evacuation replanned live.")
@@ -310,12 +337,17 @@ def main() -> int:
     p.add_argument("--hazard", choices=("forward", "oracle"), default="forward")
     p.add_argument("--gif", type=Path, help="record a GIF instead of opening a window")
     p.add_argument("--story", type=Path, help="write the four-moment still instead")
+    p.add_argument("--compare", type=int, metavar="N", help="score the policies on N leaks")
     a = p.parse_args()
     cfg = Config(a.seed, None if a.at is None else np.array(a.at), a.alarm, a.update,
                  a.t_max, a.drift, a.source, a.sigma, a.hazard)  # fmt: skip
     f = Factory.default()
     if a.gif:
         print(save_gif(f, cfg, a.gif))
+        return 0
+    if a.compare:
+        for k, v in compare(f, cfg, a.compare).items():
+            print(f"{k:8}", "  ".join(f"{m} {x:.2f}" for m, x in v.items()))
         return 0
     if a.story:
         moments = [a.alarm, a.alarm + 20, a.alarm + 45, a.t_max]
