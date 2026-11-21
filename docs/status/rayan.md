@@ -4,46 +4,57 @@ Only Rayan's agent edits this file. Update it before every PR.
 
 ## Doing
 
-- PR `feat: TabPFN leak source locator` (#18, M1) in review. Next: optional release-rate
-  regressor (`SourceEstimate.rate`), and check how TabPFN's map degrades with shifting
-  wind / sensor dropouts once simulator v1 lands.
+- Speed: return the map as soon as the location call answers (~1.7 s) and attach the
+  leak size when its call answers, so routes are not held up by the size model.
 
 ## Done
 
-- **M1: `TabPFNLocator` beats the baseline** (`src/tabpfn_spatial/source/`).
-  Simulation-based inference: 3,000 seeded simulated leaks (train seed 12345), 58 features
-  (log1p readings at 20/40/60 s, arrival times, wind), 110 leak sites merged into 100
-  zones, TabPFN classifier -> zone probabilities -> grid map. Backend `cloud` (TabPFN-3.5).
+- **Locator answers at the alarm and every 5 s after it** (PR #25, `source/`), on the
+  pipe plant from #23. Clock starts at the first alarm (a real plant does not know when
+  the leak started). One row per update, 31 columns for 14 sensors: per sensor the latest
+  reading (log1p) and the arrival time relative to the alarm, plus wind u, v and seconds
+  since the alarm. Table: 1,200 simulated leaks (seed 12345) x 7 moments (alarm + 0..30 s)
+  = 8,393 rows. 24 pipe cells = 24 zones. Before any alarm: the plant's leak prior.
+  Dead sensors = missing values.
 
-  `pipeline.evaluate(Factory.default(), 30, seed=0)`, baseline vs `locator=TabPFNLocator()`:
+  Location, 199 held-out leaks (seed 777) x 7 moments, one batched call per method,
+  backend `cloud` (TabPFN-3.5), default plant:
 
-  | Metric | Baseline | TabPFN |
-  |---|---|---|
-  | `source_error_m` | 9.41 m (weighted centroid) | **1.03 m** |
-  | `hazard_brier` (downstream, unchanged forward-sim predictor) | 0.089 | **0.040** |
-  | `exposed_plan` of 30 (downstream; standard plan 7.03) | 5.40 | **4.63** |
+  | Seconds since alarm | 0 | 5 | 10 | 20 | 30 |
+  |---|---|---|---|---|---|
+  | Prior only (likeliest fitting, no sensors): error | 17.1 m | 17.1 | 17.1 | 17.1 | 17.1 |
+  | Weighted centroid (baseline): error | 6.2 m | 6.5 | 7.1 | 8.5 | 9.1 |
+  | k-NN, same table: error | 2.6 m | 2.3 | 2.4 | 2.5 | 2.7 |
+  | **TabPFN: error** | **1.3 m** | **0.7** | **0.7** | **0.7** | **0.7** |
+  | TabPFN: exact pipe cell is top guess | 69 % | 76 % | 78 % | 76 % | 78 % |
 
-  Held-out leaks (200 leaks, test seed 777, same library; one batched cloud call):
+  Calibration (ECE of the top cell, all moments): TabPFN 0.03, centroid 0.06,
+  k-NN 0.30. Mean P(true cell): TabPFN 0.64, centroid 0.12.
 
-  | Metric | Weighted centroid | k-NN, same library | TabPFN |
-  |---|---|---|---|
-  | `error_m` (lower better) | 11.41 | 4.99 | **0.83** |
-  | P(true zone) (higher better) | 0.037 | 0.023 | **0.637** |
-  | top-1 zone accuracy | 0.060 | 0.215 | **0.805** |
-  | top-3 zone accuracy | 0.170 | 0.485 | **0.980** |
-  | ECE of top zone (lower better) | 0.046 | 0.178 | 0.121 |
+- **Leak size (`SourceEstimate.rate`)**: a TabPFN regressor on the same row predicts the
+  log release rate; 19 quantiles (5-95 %). Same 199 x 7 held-out rows:
 
-  Tokens: 310,000 for the whole run (1 call x 10,000 for the 200 held-out leaks + 30 calls
-  x 10,000 for `evaluate`, which locates one episode per call). Reproduce:
-  `uv run python -m tabpfn_spatial.source.benchmark --backend cloud --evaluate 30`.
-  Caveat: ECE 0.12 means TabPFN's top-zone confidence is somewhat off; the centroid's low
-  ECE only reflects that it is uniformly unconfident.
-- Finished GitHub setup (repo cloned, uv sync, ruff and pytest pass).
+  | Seconds since alarm | 0 | 10 | 20 | 30 |
+  |---|---|---|---|---|
+  | Prior only (median 1.0, what hazard assumed): mean error | 38 % | 38 % | 38 % | 38 % |
+  | k-NN, same table | 36 % | 24 % | 19 % | 18 % |
+  | **TabPFN** | **26 %** | **13 %** | **9 %** | **8 %** |
+  | TabPFN: true size inside its 80 % interval | 86 % | 88 % | 89 % | 92 % |
+
+- **Latency** (cloud, one live update): map only 1.68 s; map + size in parallel 3.25 s
+  (over the ~2 s budget, fix in Doing). Batch of 1,393 rows: 2.06 s.
+- `uv run sync-check --source tabpfn_spatial.source:TabPFNLocator` (offline k-NN):
+  0 problems, 0 warnings, default and random plant, t_obs 10/20/30/60 s.
+- Tokens for these results: 50,000 (5 cloud calls x 10,000). Reproduce:
+  `uv run python -m tabpfn_spatial.source.benchmark --backend cloud`.
+- Earlier (old 110-site plant, 60 s after leak start): 0.8 m vs centroid 11.4 m. Superseded.
+- Finished GitHub setup.
 
 ## Needs
 
-- Steven (pipeline, integrator): a batched `evaluate` path (e.g. call `locate_many` when
-  the locator has it) would cut `evaluate` from 30 calls to 1. Not blocking.
+- Nothing blocking. Note for Steven: `pipeline.evaluate` / `sync-check` at t_obs 60 s can
+  ask for moments beyond alarm + 30 s, which the table does not cover yet (works, but less
+  accurate there).
 
 ## Blocked
 
