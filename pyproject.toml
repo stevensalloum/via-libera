@@ -20,6 +20,7 @@ dependencies = [
 [project.scripts]
 tabpfn-check = "tabpfn_spatial.tabpfn_check:main"
 spatial-example = "tabpfn_spatial.core.example:main"
+leak-demo = "tabpfn_spatial.pipeline:main"
 
 [project.optional-dependencies]
 local = [
