@@ -16,6 +16,13 @@ Only Ahmad's agent edits this file. Update it before every PR.
 - Review the fixed-versus-varied diffusivity experiment with Ahmad. The optional
   varied context is implemented, but the default remains fixed: the comparison
   did not establish a consistent improvement in hazard detection.
+- Integrate the 3D prototype with Steven's `Plant3D` and the source-height work
+  in PRs #50 and #53. One cloud smoke case completes from the first mast alarm;
+  the live planner is not yet connected and the source/height combination assumes
+  independence. See `hazard/VOLUME3D.md` for the reproducible check and limits.
+- Prototype a 3D hazard interface for explicit `(x, y, z)` sources and machine
+  geometry. Waiting for Rayan's actual 3D source format and Steven's 3D layout /
+  planner contract before connecting it to the integrated application.
 - Multi-layout verification (#39): 117 paired case variations from 28 base leaks in
   two layouts completed before the requested time limit; groups are incomplete
   and uneven. Full settings, route baselines and limitations are in
@@ -109,6 +116,32 @@ Only Ahmad's agent edits this file. Update it before every PR.
   models; forward and offline tests 0. Same 2D simulator generates training and
   truth; 33/200 variants used the pipe prior. Full false-positive rates,
   bootstrap limits, seeds and limitations: `hazard/DIFFUSIVITY_STUDY.md`.
+- One paired 3D propane smoke case, evaluation sensor seed 899, source/height/
+  hazard training seeds 100/111/222, 8 simulated leaks each, hazard 3,200 rows,
+  forecast 10 s, alarm 5 s, top 1 of adapted 3D sources (43.38% retained).
+  Forward prototype / cloud TabPFN toxic Brier 0.02070 / 0.00728, recall at 0.5
+  0.49% (2/412) / 43.69% (180/412), hazard call 0.046 / 4.90 s. Hazard cloud
+  calls quoted 20,000 credits vs 0; source and height calls additional. Forward
+  uses different simulator physics and scaling; a single leak and tiny contexts
+  establish functionality only, not safety, reliability or a general ranking.
+- Added an adapter for the shared 3D solids, hot machine boxes, height quantiles,
+  and 3D-simulator concentration rows. The source-side 3D detector fix is a
+  separate PR #53 based on #50. No integrated 3D evacuation run is claimed.
+- Existing 2D `sync-check --hazard tabpfn_spatial.hazard:TabPFNHazardPredictor`,
+  offline backend: 24/24 checks pass; default centroid-source warnings are less
+  than 99% mass on pipes and no estimated rate. This does not check the 3D API.
+- Experimental transient 3D hazard volume and forward baseline: explicit 3D
+  source hypotheses, voxel walls, axis-aligned 3D machines and hot zones; output
+  axes `(time, z, y, x)`. Small paired cloud benchmark, one synthetic layout,
+  12 test leaks seed 20261211, 80 training leaks seed 20261210, 4,800 context
+  rows, three times, known true 3D source/rate/wind, no source estimator: mean
+  toxic Brier forward / TabPFN 0.00994 / 0.01414, recall at 0.5 91.34% /
+  76.91%, false-positive rate 0.57% / 0.87%; cloud quote 120,000 credits vs 0.
+  Same simulator family for training, baseline and truth; 3D units are relative,
+  with no HVAC or buoyancy. This is not real-world or integrated validation.
+  One repeated cloud case after bounded query batching reproduced its Brier and
+  counts for an additional quoted 10,000 credits.
+  Details: `hazard/VOLUME3D.md`.
 - Partial multi-layout cloud study, evaluation seeds 20261121/20261122/20261123,
   hazard context seed 1001, 8,000 rows, Rayan source seed 12345, top 3, open
   cells, five forecast times. Forward / centroid-context / Rayan-context toxic
@@ -255,6 +288,9 @@ Only Ahmad's agent edits this file. Update it before every PR.
 - Repeat the spreading comparison on independently generated leak seeds, more
   layouts and a different, time-dependent simulator; measure live cloud latency
   and select hazard thresholds using separate validation data.
+- Rayan/Steven: agree on a 3D source and hazard contract and supply explicit
+  source heights, 3D wall/machine geometry and ignition metadata. Do not infer
+  heights from the existing 2D map; validate 3D physics and units separately.
 - Expand the Rayan-source sensor-history pilot beyond five simulated cases and
   one plant before drawing a general conclusion about its additional value.
 - Validate early-alarm accuracy and route outcomes with independent simulation,

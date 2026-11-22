@@ -259,3 +259,53 @@ templates. All four returned finite 2D maps with the expected shapes (eight
 source-context leaks, two hazard-context leaks, one constructed alarmed reading
 per plant; baseline k-NN and zero credits). It checks the connection between
 components, not accuracy or 3D gas behaviour.
+## 2026-11-22: First explicit 3D hazard volume
+
+The earlier work tested the 2D predictor under different spreads; it did not add
+a height axis. This prototype accepts explicit 3D source hypotheses and 3D wall
+and machine geometry, creates transient synthetic 3D context rows and outputs
+toxic/fire probability volumes `(time, z, y, x)`. It can extract an explicitly
+chosen height as a 2D slice. No height is guessed for Rayan's current 2D source
+map, and the prototype is not connected to the team pipeline or 3D planner.
+
+On 12 held-out simulated leaks (seed 20261211) in one 24 × 16 × 4 m layout,
+known true 3D source, wind and rate, 80 context leaks (seed 20261210), three
+times and varied diffusivity, forward simulation / cloud TabPFN mean toxic
+Brier was 0.00994 / 0.01414 and recall at 0.5 was 91.34% / 76.91%. Pooled
+false-positive rate was 0.57% / 0.87%, respectively. Source positions and
+geometry were shared between training and evaluation; the simulator family was
+also shared. The 12 cloud calls quoted 120,000 credits; the forward baseline
+used none. The prototype uses relative concentrations and excludes ventilation
+and buoyancy, so these are not real-world hazard or route-safety results.
+An additional cloud call after bounding query-feature batches reproduced the
+first case's Brier and threshold counts (10,000 quoted credits).
+
+![Experimental 3D hazard comparison](../figures/ahmad/08-hazard-3d.png)
+
+Redraw without cloud calls:
+
+```bash
+uv run python tests/hazard/plot_volume3d.py --figure docs/figures/ahmad/08-hazard-3d.png
+```
+
+Inputs, assumptions and reproduction are in
+[`VOLUME3D.md`](../../src/tabpfn_spatial/hazard/VOLUME3D.md).
+
+### 2026-11-22: First shared 3D source-to-hazard smoke check
+
+Connected the experimental hazard prototype to Steven's plant geometry and
+simulated training concentrations, plus the source map and height quantiles from
+Rayan's work. A mast detector triggered before the original mounted detectors;
+the old horizontal locator returned its prior at that instant. Source PR #53
+adds a locator trained on all 3D detectors. The hazard adapter combines the
+separate position and height distributions assuming independence and reports
+how much probability the model retains.
+
+One held-out propane case, context seeds 100/111/222, eight training leaks per
+model, alarm 5 s, forecast 10 s, top one source (43.38% mass): forward / cloud
+toxic Brier 0.02070 / 0.00728; recall at 0.5 0.49% / 43.69%; hazard call
+0.046 / 4.90 s. Hazard cloud calls quoted 20,000 credits; source calls additional.
+The forward model has different physics and scaling, and one case cannot validate
+accuracy. The cloud model missed over half of the toxic voxels and exceeded the
+2 s budget before source and routing calls. No new presentation figure: one smoke
+case is not representative. Reproduce and see limits in `hazard/VOLUME3D.md`.
