@@ -1,0 +1,330 @@
+# 3D study: plan, data facts and decisions (working notes)
+
+Steven, started 2026-11-22. This is the lab notebook for the two-workflow study. It records
+every fact we rely on, where it comes from, and every decision, so results can be traced.
+
+## Goal (from Steven)
+
+Try both workflows, on every dataset, for both model tasks, from simple to near-real
+physics. Then report where each works, with figures, explanations and how to proceed.
+It may turn out not to work; we must know and show we tried everything.
+
+- **Workflow A (real -> sim):** fit TabPFN on real measurements, test on simulated 3D data
+  (our physics ladder and GADEN).
+- **Workflow B (sim -> real):** fit TabPFN on simulated data, test on real measurements.
+- **Task H (hazard):** concentration (or above-threshold probability) at a point
+  (x, y, z, t), given the source, wind and geometry.
+- **Task S (source):** leak position from sensor readings.
+
+TabPFN is used in context, not trained, so small real datasets can be enough as context.
+That is the reason workflow A is worth testing at all.
+
+## Datasets (facts, with sources)
+
+### Red:Vapor (Hinsen, Wiedemann, Shutin, Lilienthal; Sci Data 2026 13:586; Zenodo 16414473, CC BY 4.0)
+
+- **Facility:** DNW low-speed wind tunnel, 3.0 x 2.25 m section. A 1:50 industrial site on a
+  turntable.
+- **Frame:** origin at the turntable centre on the floor. +x points upwind, so the **wind
+  blows towards -x**. z points up, units metres (paper text).
+- **Setups:**
+  - A: the source tank only;
+  - B: the source plus one tall cylinder;
+  - C and D: a full site, the same layout rotated by +22.5 and -22.5 degrees.
+
+  The source is a fog release through a hole in a tank model, **z = 0.18 m**. Its x, y per
+  setup are in Fig. 8 and the setup 3D files (supplementary_material.zip, 262 MB), **not
+  in the text**.
+- **Fog:** 2 L propylene glycol, 1 L triethylene glycol, 1 L water, 20-40 mL ethanol. It is
+  an **aerosol**, near neutral buoyancy, not a pure gas.
+- **voxel_maps.pkl (9 MB):** 8 sampling experiments. Each is a DataFrame with:
+  - the position x, y, z (z from 0.025 to 1.145);
+  - the MiCS-6814 (NH3, NO2) and MiCS-5524 readings (voltage, resistance, Rs/R0, ppm);
+  - the PID reading (ppm, ethanol- and PG-equivalent, relative);
+  - BME680 data and 3D wind (u, v, w).
+
+  Grid: 12 x 12 cm horizontal, 8 cm vertical, up to 20 x 20 x 12 cells. Dwell time 5 s
+  per cell (20-30 s for setup B).
+- **PID ppm is relative and uncalibrated** (an assumed 55 mV/ppm, response factors
+  RF_ethanol = 3, RF_PG = 11). Use it as a **concentration-proportional** signal, not
+  absolute ppm. Closed-circuit tunnel: the background builds up (12-42 ppm max per run).
+- **Experiments** (overview_table.csv):
+
+  | Setup | Wind 1.3-1.5 m/s | Wind 3.6-3.8 m/s |
+  |---|---|---|
+  | A | Exp 1 | - |
+  | B | Exp 2 | Exp 3 |
+  | C | Exp 4, 8 | Exp 5 |
+  | D | Exp 6 | Exp 7 |
+
+  Plus 22 fly-through runs and 9 purging runs.
+
+### Örebro 3DSEN (Burgués, Hernández, Lilienthal, Marco 2018/2020; GitHub jburgues/Orebro3DSEN, GPL-3.0)
+
+- **Room:** office, 5.94 m (x) x 4.56 m (y). HVAC supplies air at floor level and extracts it
+  at the ceiling; one door, one window that opens.
+- **Sensors:** 27 MOX (Figaro TGS), calibrated to ppm, on **9 poles x 3 heights:
+  z = 0.45, 1.20, 2.23 m** (wsn_lite.py). The x and y of the poles are given only as grid
+  indices 0-2 ("evenly distributed").
+  - **Assumption:** pole centres at x = 5.94 (i + 0.5) / 3 and y = 4.56 (j + 0.5) / 3.
+- **Sampling:** 2 Hz, about 1.9 h per experiment. The logs also have wind speed and
+  direction at 1.3 m.
+- **The 10 experiments** (README Table 1):
+
+  | Exp | Source (x, y, z) m | Beaker | Airflow | Window |
+  |---|---|---|---|---|
+  | 1 | (2.70, 0.50, 0.90) | small | off | closed |
+  | 2 | (2.70, 0.50, 0.90) | large | off | closed |
+  | 3 | (5.95, 1.60, 0.00) | large | off | closed |
+  | 4 | (0.10, 4.50, 2.00) | large | off | open |
+  | 5 | (2.70, 2.70, 0.00) | large + bubbler | off | closed |
+  | 6 | (2.70, 0.50, 0.90) | small | DC fan | closed |
+  | 7 | (2.70, 0.10, 2.20) | small | DC fan | closed |
+  | 8 | (2.70, 0.50, 0.90) | small | tower fan I | closed |
+  | 9 | (2.70, 0.50, 0.90) | large | tower fan I | closed |
+  | 10 | (2.70, 3.15, 1.75) | large | tower fan III | closed |
+
+  So there are 6 distinct source positions at **heights 0 to 2.2 m**.
+- **Chemical:** an "evaporating chemical source"; the README does not name it (ethanol
+  likely, unconfirmed).
+
+### UCI 251 (Vergara et al. 2013, CC BY 4.0, 7.8 GB)
+
+- **Tunnel:** 2.5 x 1.2 x 0.4 m. 72 MOX on 9 boards, at one of 6 line positions L1-L6 at a
+  time.
+- **Gases:** 10. Wind: 3 fan settings. Heater: 4-6 V. Sampling: 100 Hz, 260 s, about
+  18,000 runs.
+- **No height information.** Use: distance-to-source (1D) and concentration vs distance.
+- **Processing plan:** keep the gases and settings needed, downsample to 1 Hz, keep a
+  compact npz, then delete the zip (25 GB free disk).
+
+### SRGDM (Winkler et al., Sens. Actuators B 419 (2024) 136267; GitHub BAMresearch/SRGDM, MIT)
+
+- **Synthetic part:** 2D gas maps (30 x 25) generated from **measured airflow**. We keep
+  the valid split (65 MB) out of 410 MB.
+- **Real part:** a 6 x 5 sensor grid, 4 recording days (4 x 13.7 MB), stored as tensors
+  [n_sources, n_images, 6, 5].
+- **2D only.** Use: horizontal plume shape and the sensor-grid source task.
+
+### VGR (Ojeda et al. 2023, GADEN houses, 48.6 GB)
+
+Not downloaded (disk space). Not needed if GADEN runs locally.
+
+
+## What each dataset measures: sensors, rows, features (plain language)
+
+Common words:
+- **MOX (metal-oxide) sensor:** a heated tin-oxide film whose electrical resistance changes
+  when gas molecules react on it. Cheap and sensitive, but slow (seconds to recover), not
+  specific to one gas, and it drifts with temperature and humidity. It gives a *signal*,
+  not ppm, unless it is calibrated.
+- **PID (photo-ionisation detector):** UV light ionises volatile molecules and the current
+  is measured. Fast and proportional to concentration, so it is the **reference** sensor.
+- **Anemometer:** measures wind (speed, or the full 3D vector u, v, w).
+- A **row** for TabPFN is one measurement: *where* (x, y, z), *when* (t), *conditions*
+  (wind, source, obstacles) -> *what was measured* (concentration).
+
+### Red:Vapor (figure `docs/figures/3d-study/data_redvapor.png`)
+- **Sensors on one probe, moved by a gantry:** PID-AH2 (reference, relative ppm), MiCS-5524
+  and MiCS-6814 (MOX), BME680 (temperature, humidity, pressure), a 3D ultrasonic anemometer.
+- **A row:** one voxel (12 x 12 x 8 cm) of the 1:50 site, averaged over its 5 s dwell
+  (20-30 s for setup B): x, y, z, PID, MOX, 3D wind. 784-4,728 voxels per experiment, 8
+  experiments, 4 leak positions.
+- **Features we derive:** distance downwind and crosswind of the leak, height, height
+  above the release, wind speed, "is a building between the leak and this voxel".
+  **Target:** PID excess above the upwind background (relative units).
+- **What the figure shows:**
+  - downwind of the leak the fog is densest at 0.26 m, just above the 0.18 m release, and
+    falls to 10-40 % of that peak above 0.5 m;
+  - at 3.6 m/s it stays lower (setup B: 3 % of the peak above 0.5 m);
+  - in the full site (C) the plume is channelled between buildings (white cells = solid).
+
+### Örebro 3DSEN (figure `data_orebro.png`)
+- **Sensors:** 27 Figaro TGS MOX (several models), each calibrated to ppm in a lab, on 9 poles
+  x 3 heights (0.45, 1.20, 2.23 m); 4 temperature + 4 humidity (DHT22); wind speed and
+  direction at 1.3 m. 2 Hz, about 1.9 h per experiment.
+- **A row:** one sensor at one time: x, y, z, t, source position, airflow setting ->
+  ppm. Here the 27 sensors read **at the same time**, which no other dataset has.
+- **What the figure shows (mean over the run, per height):**
+  - with the HVAC (in at floor, out at ceiling) and normal sources, the **middle and top
+    layers read 2-5x the bottom one**, even for sources on the floor (exp 3);
+  - **the exception is exp 5:** a large source on the floor *with a bubbler* (much higher
+    release rate) is highest at the floor. So height structure from gas density appears only
+    for strong releases; weak releases follow the room air;
+  - exp 4 (source at 2.0 m near the open window) is highest at the top.
+
+### UCI 251 (figure `data_uci.png`)
+- **Sensors:** 9 boards x 8 MOX (Figaro TGS; models listed in Vergara et al. 2013, not on
+  the dataset page), across the 1.2 m tunnel width, at one of 6 distances (L1 nearest the
+  gas inlet; distances in the paper's Fig. 2, to be checked) at a time. Fan 1500 / 3900 /
+  5500 rpm. Heater 5.0 V kept (the others respond about the same).
+- **Timing (measured from the valve columns):** clean air 0-20 s, gas 20-200 s, clean air
+  after.
+- **A row:** one run: gas, its cylinder ppm, line (distance), fan, board (crosswind
+  position) -> relative signal change R/R0 - 1, sampled every 5 s.
+- **What the figure shows:**
+  - **only the centre board (5) responds**: the plume is narrower than the 13 cm board
+    spacing, so 8 of 9 boards see almost nothing;
+  - on board 5 the signal falls with distance (slow fan: 47 % at L1 to 4 % at L6) and with
+    wind speed (more dilution);
+  - the stored value **rises** in gas, although the page calls it a resistance (a MOX
+    resistance should fall): we use the relative change and report the doubt.
+- **Limits:** no height, no obstacles: a 1D distance check.
+
+### SRGDM (figure `data_srgdm.png`)
+- **Synthetic part:** 2D plumes on a 30 x 25 cell grid, simulated with **wind recorded in a
+  real room** on 4 days ("seasons"), 30 source positions, 180 frames each, values 0..1.
+- **Real part:** a 6 x 5 grid of real gas sensors, 3800 frames x 30 segments per recording
+  day, values 0..1. What the first axis means is not documented, so we use it only for
+  field statistics.
+- **A row:** one cell at one frame: (row, column, t, source cell, season) -> value.
+- **What the figure shows:** a meandering, intermittent plume (one frame is patchy, the
+  mean is smooth); at the 6 x 5 sensor spacing most of the plume shape is lost.
+
+## Physics ladder (simple -> near-real), each level checked against real data
+
+| Level | Model | Parameters from |
+|---|---|---|
+| L0 | Today's 2D advection-diffusion | Our simulator |
+| L1 | 3D Gaussian plume with ground reflection + vertical drift by density | Plume theory; dispersion coefficients; Britter-McQuaid for dense gas |
+| L2 | 3D finite-volume advection-diffusion with obstacles, buoyant drift, ventilation | Indoor turbulent diffusivity, air changes per hour from literature |
+| L3 | 3D flow around obstacles + L2 dispersion | Potential flow or a small Navier-Stokes solver |
+| L4 | GADEN: OpenFOAM CFD wind + filament dispersion with buoyancy (molecular weight) | GADEN papers |
+
+## Decisions so far
+
+- **Red:Vapor is the primary real 3D dataset** for task H: real obstacles, 3D wind,
+  12 heights, PID reference.
+- **Örebro is the primary real dataset for height and indoor physics**: sources at
+  heights 0-2.2 m, HVAC, simultaneous 3D sensing.
+- **UCI and SRGDM are 1D and 2D checks.** They cannot test height.
+- **Concentrations differ in units across datasets** (relative PID, calibrated MOX ppm,
+  raw MOX resistance). All comparisons use **normalised concentration** (per experiment:
+  c / c_reference) and **rank-based metrics** (Spearman, AUC of top-decile cells), plus
+  log-scale R^2.
+- **Features shared across domains** (needed for transfer): downwind / crosswind
+  distance and height above the source scaled by a length scale, the height of the point,
+  wind speed, and whether obstacles lie between source and point.
+- **Disk:** 25 GB free at the start. Big raw files are deleted after conversion.
+
+## Progress log
+
+### 2026-11-22, session 1
+
+- **Red:Vapor leak positions** (from the setup STL models): hole at (0.783, 0.017, 0.18) m
+  for A and B; C turned -22.5 degrees gives (0.727, -0.29, 0.18); D turned +22.5 degrees
+  gives (0.72, 0.309, 0.18). The tank radius is 0.157 m.
+- **First real-data finding, Red:Vapor:** the plume is densest near the release height
+  (bands 0.12-0.42 m) and 3-10x weaker above 0.7 m. At 3.6 m/s it stays lower.
+- **First real-data finding, Örebro:** with HVAC supplying at the floor and extracting at
+  the ceiling, the **middle and top sensors read higher than the bottom ones**, even for
+  floor-level sources (exp 3: 0.57 / 1.40 / 1.63 ppm at 0.45 / 1.20 / 2.23 m). Room airflow
+  dominates over gas density, so 3D needs real wind fields.
+- **Örebro data quality:** some MOX channels go negative (exp 4, -1.7 ppm), a calibration
+  drift to handle.
+- **Loaders:** `src/tabpfn_spatial/realdata/{redvapor,orebro}.py`, with tests.
+- **GADEN core native macOS build** (`~/dev/gaden/gaden_core`):
+  - fixed so far: submodules fetched over HTTPS, `third_party/libbsc/version` renamed to
+    `version.txt` (it clashed with the C++ `<version>` header), formatter `format()` made
+    const for fmt 12, a stray `{}` removed in PlaybackSimulation.cpp, `brew install libomp
+    fmt eigen`;
+  - **next blocker:** `boost/compute.hpp` not found (try `brew install boost`, or point at
+    `third_party/compute/include`).
+- **Installed:** colima and docker (not started; images are pulled only after UCI is
+  converted and its zip deleted).
+- **Downloads:**
+  - done: Red:Vapor voxel maps, experiments.pkl, data_records_csv.zip, supplementary (STL);
+    Örebro logs and images; SRGDM real 6x5 and the valid split;
+  - running: UCI zip (7.8 GB) in the background.
+  - **Still to fetch:** SRGDM `30x25_multipleSources/test.pt` (came back empty); torch is
+    needed to convert the SRGDM tensors.
+
+### 2026-11-22, session 2
+
+- **Data kept small (Steven: "lower sample rates and less data"):** UCI 8.4 GB zip -> 14 MB
+  (5.0 V heater, one sample every 5 s = our detectors' period; 46 of 3630 files broken
+  and skipped). SRGDM read without torch. Red:Vapor voxel maps (9 MB) are the main file;
+  its 2 GB time series will be cut to a small extract or deleted.
+- **GADEN core builds natively on macOS** (more portability fixes: `std::chrono::_V2`
+  in Profiling.hpp and Time.hpp, missing `<sstream>` in STL.hpp). A small driver
+  (`~/dev/gaden/driver/gaden_run.cpp`) runs one case and samples ppm at given points.
+- **How GADEN really works (read from the source, `src/RunningSimulation.cpp`):**
+  - each filament moves with the wind of its cell + Gaussian noise (0.01-0.02 m/s);
+  - its width grows as sigma^2 = sigma0^2 + gamma t; a puff obeys sigma^2 = 2 K t, so
+    **gamma = 2 K**. The default gamma = 10 cm^2/s means K = 5e-4 m^2/s, below indoor
+    turbulent diffusivities (~1e-3 to 1e-2 m^2/s): to be calibrated;
+  - **buoyancy is a heuristic:** a Stokes terminal velocity without the particle diameter,
+    scaled by the filament's centre ppm. It is not dimensionally consistent, so GADEN's
+    height behaviour must be checked against real data, not trusted;
+  - GADEN lists ethanol at specific gravity 1.04; ethanol vapour is 1.59;
+  - wind is an input CSV (cell centres, u v w): any flow solver can produce it, not only
+    OpenFOAM.
+- **Dataset overview figures** in `docs/figures/3d-study/`; findings in the section above.
+
+### 2026-11-22, session 2 (continued): physics ladder results
+
+**Red:Vapor data, refined:**
+- Per-voxel turbulence and intermittency extracted from the 10 Hz series
+  (`voxel_stats.npz`, 1 MB; the 2 GB raw files deleted). Measured at 1.4 m/s:
+  sigma_u ~ 0.13 m/s (9 % intensity), sigma_w ~ 0.06 m/s; the wind grows from 0.93 m/s at
+  0.02 m to 1.6 m/s at 1 m (a boundary layer).
+- **Background:** the closed tunnel fills with fog (upstream sensor 0 -> 1-2 ppm-rel over a
+  run, as large as the plume signal), and the raster is sequential, so each voxel needs
+  the background *at its own time*. Method: the 10th percentile of all readings within
+  +-450 s (the raster sweeps mostly clean air). Check: correlation 0.88-1.00 with the
+  independent upstream sensor; upwind voxels then read ~0 excess.
+
+**Ladder implementation (`src/tabpfn_spatial/study3d/`):**
+- STL voxelised at 4 cm (0 of 16,000 measured points inside a building);
+- L1 Gaussian plume (Taylor spread, Hanna 1982 time scale);
+- L2 finite volumes around buildings (advective form; unadjusted wind);
+- L3 mass-consistent wind (Sherman 1978) + L2 transport;
+- flow and turbulence from each experiment's upwind measurements;
+- tests against conservation laws (plume flux = release; duct outflow = release;
+  divergence-free L3 wind goes round and over a block).
+
+**Bugs found and fixed on the way:** the leak hole (z = 0.18 m, on top of the 0.18 m tank)
+voxelised into a solid cell, which silently put the release in the last fluid cell
+(negative correlations); now the release goes to the first air cell above and a solid
+source raises an error. A 1-cell sealed pocket in setup A made the system singular; sealed
+pockets are filled.
+
+**Results, Red:Vapor (scale-free scores; AUC = finding the real hottest 10 %):**
+- All levels find where the gas is: AUC 0.71-0.96.
+- **Height:** with obstacles (setups C, D), L2/L3 get the vertical profile better than the
+  plume (profile r 0.81-0.98 vs 0.49-0.87): buildings matter for height.
+- **Spread:** with the *measured* turbulence every level is far too narrow (crosswind
+  spread 0.1-0.5 of the real one). Real plumes need about 4-8x the measured sigmas. Why:
+  each voxel's sigma comes from a 5 s dwell, which cannot see slower meandering, and the
+  closed tunnel recirculates fog. **Measured local turbulence explains only 1/8-1/4 of
+  the spread: any simulator (GADEN included) must be calibrated on spread.**
+- Calibration is done fairly: per held-out setup, the factor (1, 4, 8) that scores best on
+  the other setups.
+
+**Results, UCI (1D check):** every level finds the hot centre board (AUC 0.97-1.00).
+L1 is too narrow (spread 0.4x); L2/L3 too wide (1.3-1.6x: numerical diffusion of the
+first-order scheme at 2.5 cm and 0.1-0.3 m/s).
+
+**Results, Örebro (room):** **every level fails** (AUC 0.32-0.86, mostly near chance;
+inverted vertical profile for the floor source, exp 3). The room is governed by its HVAC
+flow, whose inlet and outlet positions are not published, so no simulator can be set up
+faithfully. Limit of the data, reported as such.
+
+**Tools ready for L4:** GADEN core (native) + driver; OpenFOAM 2406 image (1.9 GB) in
+Colima.
+
+### 2026-11-22, session 2 (end): L4, workflows, verdict
+
+- **L4 built and run:** OpenFOAM 2406 RANS (simpleFoam, k-epsilon) per setup in Docker,
+  150-163k cells, 20-25 min each (A, B converged; C, D plateau at residual 1e-4 / 6e-4,
+  vortex shedding). Inlet: log law fitted to the measured profile (matches U at 0.5 m; the
+  tunnel profile is not a developed log law, setup B nearly uniform below 0.6 m).
+  GADEN in the CFD wind via the native driver (< 1 s per run).
+- **GADEN in a steady wind is deterministic:** 10x filaments, 3x averaging changed nothing.
+- **Calibrated, L1 >= L2 ~ L3 > L4 > L4G** against real data and as B context.
+- **Source task:** adjoint solves (Keats et al. 2007) give every leak per detector; cloud
+  TabPFN with simulated context: 0.22 m median error (detectors 0.45 m apart).
+- **SRGDM:** locator holds under an unseen airflow for known candidates (0.02 cells).
+- **Height:** Britter & McQuaid passive-limit distances (`heights.png`).
+- **Cloud tokens for the study:** 1.56M (credits 1.44M -> 3.00M), under the 2M agreed.
+- Report with the verdict: `docs/research/3d-two-workflows.md`.
