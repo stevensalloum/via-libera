@@ -19,6 +19,7 @@ from tabpfn_spatial.sim import Factory
 from tabpfn_spatial.world.export import scene
 
 WEB = Path(__file__).parent / "web"
+FIGURES = Path(__file__).resolve().parents[3] / "docs" / "figures"
 
 
 def clean(obj):
@@ -59,6 +60,8 @@ class _Handler(SimpleHTTPRequestHandler):
     def translate_path(self, path: str) -> str:
         if path.split("?")[0].startswith("/data/"):
             return str(self.data / path.split("?")[0][len("/data/") :])
+        if path.split("?")[0].startswith("/figures/"):  # the study figures, for the story page
+            return str(FIGURES / path.split("?")[0][len("/figures/") :])
         return super().translate_path(path)
 
     def do_POST(self) -> None:

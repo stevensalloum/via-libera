@@ -225,6 +225,7 @@ if (rep) {  // legend over the map
   const place = () => { lg.style.bottom = `${mini.height + 18}px`; lg.style.maxWidth = `${mini.width}px`; };
   place();
 }
+$("back").href = `./${location.search}`;
 $("daylight").onchange = (e) => setTheme(e.target.checked);
 const panel = $("panel");
 panel.querySelector("h1").onclick = () => panel.classList.toggle("collapsed");

@@ -21,4 +21,4 @@ def test_serves_the_viewer_and_the_scene(tmp_path: Path) -> None:
         assert scene["width"] == 60
     finally:
         server.shutdown()
-    assert (WEB / "index.html").exists()
+    assert (WEB / "index.html").exists() and (WEB / "factory.html").exists()
