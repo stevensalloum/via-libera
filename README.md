@@ -33,9 +33,19 @@ Figures: [docs/figures/final](docs/figures/final).
 
 ## Demo (for the presentation)
 
+**One command, nothing computed, no tokens:**
+
+```bash
+uv run via-libera              # opens the saved cloud run (demo/T-plant-cloud) in the browser
+```
+
+The viewer loads Three.js from a CDN: have internet (or a phone hotspot) on the demo laptop.
+Other commands:
+
 ```bash
 uv sync                                                   # once
-uv run world --replay --rung T --leak 500 --backend cloud # the 3D demo (about 1M tokens)
+uv run via-libera --list                                  # saved demo runs (demo/)
+uv run world --replay --rung T --leak 500 --backend cloud # a new 3D run (about 1M tokens)
 uv run world --keep                                       # replay the last run again, free
 uv run world --replay --rung T --leak 500 --backend baseline  # offline, no tokens
 uv run evac-pipeline --models team --backend baseline     # the 2D view: one person, live

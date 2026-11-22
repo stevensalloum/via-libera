@@ -53,3 +53,6 @@ htmlcov/
 
 # milestone folders (videos, big files): local only
 milestones/
+
+# demo videos recorded from the viewer
+/demo/*/videos/
