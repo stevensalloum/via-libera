@@ -355,3 +355,45 @@ else {
   };
   requestAnimationFrame(loop);
 }
+
+// ---- background: the table TabPFN reads, streaming in (T toggles; on by default locally) ------
+(() => {
+  if (!rep) return;
+  const local = ["localhost", "127.0.0.1"].includes(location.hostname);
+  const layer = document.createElement("div");
+  layer.className = "datastream";
+  layer.innerHTML = `<div class="ds-head"></div><div class="ds-body"></div>`;
+  document.body.prepend(layer);
+  const on = (v) => layer.classList.toggle("on", v);
+  on(local || new URLSearchParams(location.search).get("table") === "1");
+  addEventListener("keydown", (e) => { if ((e.key === "t" || e.key === "T") && e.target.tagName !== "INPUT") on(!layer.classList.contains("on")); });
+  const s = rep.scene, nx = s.solid[0].length, cell = s.cell, K = Math.min(14, s.sensors.length);
+  const frames = rep.gas.frames.map(b64), { log_min: lo, log_max: hi, every } = rep.gas;
+  const conc = (b) => (b === 0 ? 0 : 10 ** (lo + (b / 255) * (hi - lo)));
+  const idx = s.sensors.slice(0, K).map(([x, y]) => Math.floor(y / cell) * nx + Math.floor(x / cell));
+  const head = ["t (s)", ...idx.map((_, i) => `s${String(i + 1).padStart(2, "0")}`), "…", "alarm"];
+  layer.querySelector(".ds-head").textContent = head.map((h) => h.padStart(7)).join("");
+  const body = layer.querySelector(".ds-body");
+  let k = 0, u = 0;
+  setInterval(() => {
+    if (!layer.classList.contains("on")) return;
+    const f = frames[k % frames.length], t = (k % frames.length) * every;
+    const alarm = rep.t_alarm !== null && t >= rep.t_alarm;
+    const row = document.createElement("div");
+    row.textContent = [t.toFixed(0), ...idx.map((c) => conc(f[c]).toFixed(3)), "…", alarm ? "1" : "0"].map((v) => v.padStart(7)).join("");
+    if (alarm) row.className = "hot";
+    body.appendChild(row);
+    const up = rep.updates[u % rep.updates.length];
+    if (alarm && up && t >= up.t) {  // a model update: what TabPFN made of these rows
+      const m = document.createElement("div");
+      m.className = "model";
+      const g = up.source_top[0];
+      m.textContent = `  ▶ TabPFN @ ${up.t.toFixed(0)} s: leak at (${g.xy[0].toFixed(0)}, ${g.xy[1].toFixed(0)}) m, p = ${g.p.toFixed(2)} · error ${up.source_error_m.toFixed(1)} m · rate ${up.rate_median.toFixed(2)}`;
+      body.appendChild(m);
+      u++;
+    }
+    while (body.children.length > 60) body.firstChild.remove();
+    k++;
+    if (k % frames.length === 0) u = 0;
+  }, 260);
+})();

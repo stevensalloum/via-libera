@@ -139,3 +139,25 @@ video.bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: 
 .results-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 20px; width: 100%; margin-bottom: calc(var(--cam-h) - 40px); }
 .res-side { display: grid; gap: 14px; align-content: start; }
 .res-side .kpis div { flex: 1 1 40%; }
+/* background data stream (the TabPFN context table) */
+.datastream { position: fixed; inset: 0; z-index: 0; pointer-events: none; display: none; overflow: hidden;
+  font: 13px/1.55 ui-monospace, "SF Mono", Menlo, monospace; color: #3fc1e8; opacity: 0.16; white-space: pre;
+  padding: 70px 0 0 60px; -webkit-mask-image: linear-gradient(180deg, #000 0, #000 80%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0, #000 80%, transparent 100%); }
+.datastream.on { display: block; }
+.datastream .ds-head { color: #f39200; font-weight: 700; }
+.datastream .ds-body { display: flex; flex-direction: column; justify-content: flex-end; height: calc(100vh - 110px); }
+.datastream .hot { color: #e6eef5; }
+.datastream .model { color: #f39200; font-weight: 700; }
+main, .topbar, .rail, .hud { position: relative; z-index: 1; }
+.topbar { position: fixed; z-index: 20; }
+.rail, .hud { position: fixed; }
+/* print / save as PDF: one scene per page (slides fallback) */
+@media print {
+  @page { size: 1920px 1080px; margin: 0; }
+  html { scroll-snap-type: none; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .topbar, .rail, .hud, .camframe, .datastream, .tabs nav, .live-bar, #enter-person { display: none !important; }
+  .scene { height: 1080px; min-height: 0; page-break-after: always; break-after: page; overflow: hidden; }
+  .split { margin-bottom: 0; }
+}
