@@ -10,8 +10,6 @@ import json
 import time
 
 import numpy as np
-from tabpfn_spatial.source.height_locator import HeightLocator
-from tabpfn_spatial.source.locator3d import TabPFNLocator3D
 
 from tabpfn_spatial.contracts import TOXIC_LIMIT
 from tabpfn_spatial.env import load_env
@@ -20,6 +18,8 @@ from tabpfn_spatial.hazard.volume3d_predictor import ForwardVolumePredictor, Tab
 from tabpfn_spatial.sim import Factory
 from tabpfn_spatial.sim.gas3d import Leak3D, Ventilation, simulate
 from tabpfn_spatial.sim.plant3d import Plant3D
+from tabpfn_spatial.source.height_locator import HeightLocator
+from tabpfn_spatial.source.locator3d import TabPFNLocator3D
 
 
 def main() -> None:
