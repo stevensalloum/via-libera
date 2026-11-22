@@ -45,7 +45,7 @@ def figures(rows: list[dict], out: Path, backend: str) -> list[Path]:
                        error_kw={"ecolor": MUTED, "lw": 1})  # fmt: skip
         ax.set_xticks([(len(pols) - 1) / 2, len(pols) + 1 + (len(pols) - 1) / 2],
                       ["known plants", "unseen plants"])  # fmt: skip
-        ax.set_title("team's 3D models (TabPFN)" if models == "tabpfn" else "perfect models",
+        ax.set_title("TabPFN models" if models == "tabpfn" else "perfect models",
                      color=INK, fontsize=11)  # fmt: skip
         _style(ax)
     axes[0].set_ylabel("seconds in harmful gas per person", color=INK)
@@ -63,7 +63,7 @@ def figures(rows: list[dict], out: Path, backend: str) -> list[Path]:
         ax.bar(np.arange(len(plants)) + (k - 1) * 0.27, ms, 0.25, color=COLOURS[p], label=NAMES[p])
     ax.set_xticks(range(len(plants)), plants, rotation=30, ha="right")
     ax.set_ylabel("seconds in harmful gas per person", color=INK)
-    ax.set_title("Per plant, team's 3D models", color=INK, fontsize=11)
+    ax.set_title("Per plant, TabPFN models", color=INK, fontsize=11)
     ax.legend(frameon=False, fontsize=9)
     _style(ax)
     fig.tight_layout()
@@ -88,7 +88,7 @@ def figures(rows: list[dict], out: Path, backend: str) -> list[Path]:
         ax.set_xticks([0, 1], ["known", "unseen"])
         ax.set_title(title, color=INK, fontsize=10)
         _style(ax)
-    fig.suptitle("Rayan's locator + height, Ahmad's 3D hazard (line = median)", color=INK)
+    fig.suptitle("Source, height and hazard skill of the TabPFN models (line = median)", color=INK)
     fig.tight_layout()
     paths.append(out / f"skill-{backend}.png")
     fig.savefig(paths[-1], dpi=160)

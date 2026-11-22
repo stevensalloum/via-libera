@@ -408,7 +408,8 @@ export class Replay {
     const scale = new THREE.Vector3(size, size, size);
     for (let i = 0; i < this.n; i++) {
       const st = track.state[k0 * this.n + i];
-      if (st === 3 || (this.personView && i === this.selected)) { this.bodies.setMatrixAt(i, hidden); this.heads.setMatrixAt(i, hidden); continue; }
+      const solo = this.solo && i !== this.selected;  // only the selected worker is drawn
+      if (st === 3 || solo || (this.personView && i === this.selected)) { this.bodies.setMatrixAt(i, hidden); this.heads.setMatrixAt(i, hidden); continue; }
       const [x0, y0] = this.personXY(track, k0, i), [x1, y1] = this.personXY(track, k1, i);
       const x = x0 + (x1 - x0) * a, y = y0 + (y1 - y0) * a;
       if (Math.hypot(x1 - x0, y1 - y0) > 0.05) q.setFromAxisAngle(up, Math.atan2(x1 - x0, -(y1 - y0)) + Math.PI);
@@ -555,7 +556,7 @@ export function replayPanel(replay) {
     <div class="rcharts"><canvas id="r-out" width="420" height="110"></canvas><canvas id="r-ingas" width="420" height="110"></canvas>
       <div id="r-legend"></div></div>
     <div id="r-person" hidden><div id="r-pinfo"></div>
-      <div class="rrow"><button id="r-follow">Follow</button><button id="r-pview" title="See through this person's eyes, with the green route to follow">&#128065; Person view</button><button id="r-clear">Clear</button></div>
+      <div class="rrow"><button id="r-follow">Follow</button><button id="r-pview" title="See through this person's eyes, with the green route to follow">&#128065; Person view</button><button id="r-solo" title="Hide everyone else">Only this worker</button><button id="r-clear">Clear</button></div>
       <canvas id="r-pchart" width="420" height="120"></canvas></div>`;
   document.body.appendChild(el);
   const $ = (id) => document.getElementById(id);
@@ -575,7 +576,8 @@ export function replayPanel(replay) {
   $("r-cine").onchange = (e) => { replay.cinematic = e.target.checked; };
   $("r-follow").onclick = () => { replay.personView = false; replay.follow = !replay.follow; };
   $("r-pview").onclick = () => { replay.personView = !replay.personView; replay.follow = replay.personView; };
-  $("r-clear").onclick = () => replay.select(null);
+  $("r-clear").onclick = () => { replay.solo = false; replay.select(null); };
+  $("r-solo").onclick = () => { replay.solo = !replay.solo; };
   const curves = planCurves(replay);
   $("r-legend").innerHTML = Object.keys(curves).map((p) => `<span style="color:${PLAN_COLOURS[p] || "#ccc"}">&#9644; ${PLAN_NAMES[p] || p}</span>`).join(" ");
   return () => {
@@ -587,6 +589,7 @@ export function replayPanel(replay) {
         .map(([p, c, what]) => `<span style="color:${c}">&#9644;</span> ${what}: <b>${g[p]} s</b>`).join("<br>");
       $("r-follow").textContent = replay.follow && !replay.personView ? "Stop following" : "Follow";
       $("r-pview").innerHTML = replay.personView ? "Exit person view" : "&#128065; Person view";
+      $("r-solo").textContent = replay.solo ? "Show everyone" : "Only this worker";
       drawExposure($("r-pchart"), replay, i, rep.t_end);
     } else card.hidden = true;
     drawCurves($("r-out"), curves, "out", "% of people out", replay.t, rep.t_end, 100);

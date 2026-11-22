@@ -1,0 +1,288 @@
+{
+ "source_2d": {
+  "t": [
+   0,
+   5,
+   10,
+   20,
+   30
+  ],
+  "error_m": {
+   "prior": [
+    17.1,
+    17.1,
+    17.1,
+    17.1,
+    17.1
+   ],
+   "centroid": [
+    6.2,
+    6.5,
+    7.1,
+    8.5,
+    9.1
+   ],
+   "knn": [
+    2.6,
+    2.3,
+    2.4,
+    2.5,
+    2.7
+   ],
+   "tabpfn": [
+    1.3,
+    0.7,
+    0.7,
+    0.7,
+    0.7
+   ]
+  },
+  "size_t": [
+   0,
+   10,
+   20,
+   30
+  ],
+  "size_error_pct": {
+   "prior": [
+    38,
+    38,
+    38,
+    38
+   ],
+   "knn": [
+    36,
+    24,
+    19,
+    18
+   ],
+   "tabpfn": [
+    26,
+    13,
+    9,
+    8
+   ]
+  },
+  "ece": {
+   "centroid": 0.06,
+   "knn": 0.3,
+   "tabpfn": 0.03
+  },
+  "n": "199 held-out leaks x 7 moments"
+ },
+ "hazard_2d": {
+  "diffusivity": [
+   0.2,
+   0.4,
+   0.8,
+   1.6,
+   3.2
+  ],
+  "brier": {
+   "forward": [
+    0.0572,
+    0.0478,
+    0.0403,
+    0.0407,
+    0.0648
+   ],
+   "tabpfn": [
+    0.0417,
+    0.0398,
+    0.0408,
+    0.0416,
+    0.0502
+   ]
+  },
+  "operating": {
+   "forward": [
+    83.5,
+    3.4
+   ],
+   "tabpfn_p50": [
+    65.8,
+    2.3
+   ],
+   "tabpfn_p19": [
+    88.3,
+    8.1
+   ]
+  },
+  "n": "40 held-out leaks x 5 mixing strengths"
+ },
+ "planner_2d": {
+  "n_leaks": 24,
+  "plants": 24,
+  "baseline/nearest": [
+   0.7290580443409148,
+   0.20854791106225373
+  ],
+  "baseline/risk": [
+   0.15721441810996364,
+   0.03306643788824772
+  ],
+  "baseline/ccrp": [
+   0.17868888229760563,
+   0.03131486557894254
+  ],
+  "loc/baseline": 8.595241580617241,
+  "tabpfn/nearest": [
+   0.7290580443409148,
+   0.20854791106225373
+  ],
+  "tabpfn/risk": [
+   0.08540329898849601,
+   0.012172929778570585
+  ],
+  "tabpfn/ccrp": [
+   0.08171740155259856,
+   0.01134612587147592
+  ],
+  "loc/tabpfn": 0.0,
+  "perfect/nearest": [
+   0.7290580443409148,
+   0.20854791106225373
+  ],
+  "perfect/risk": [
+   0.08987450950172156,
+   0.010141116048977055
+  ],
+  "perfect/ccrp": [
+   0.0925068733346961,
+   0.010211434448213798
+  ],
+  "loc/perfect": 0.0
+ },
+ "factory_3d": {
+  "plants": 9,
+  "tabpfn": {
+   "loc_err_median_m": 0.6313907306996938,
+   "height_err_m": 0.6313907306996938,
+   "hz_recall": 0.2610504839197298,
+   "hz_false": 0.0,
+   "hz_brier": 0.0701977287170704
+  },
+  "knn": {
+   "loc_err_median_m": 2.2045000000000003,
+   "height_err_m": 1.6250000000000002,
+   "hz_recall": 0.7586723138099324,
+   "hz_false": 0.020937129300118623,
+   "hz_brier": 0.05039624104468079
+  },
+  "exposure": {
+   "nearest": [
+    0.5013018194356211,
+    0.2289975601177691
+   ],
+   "knn": [
+    0.12301813318213939,
+    0.06229634641504575
+   ],
+   "tabpfn": [
+    0.11747246925100731,
+    0.04483963263598204
+   ],
+   "perfect": [
+    0.08237855074152328,
+    0.045344543143026945
+   ]
+  }
+ },
+ "real": {
+  "source_redvapor_m": {
+   "tabpfn": 0.3783588764303051,
+   "knn": 0.6419289540220916,
+   "n": [
+    56,
+    48
+   ]
+  },
+  "source_srgdm_cells": {
+   "tabpfn": 0.8320528493534897,
+   "knn": 1.4976761962286425,
+   "n": [
+    8,
+    8
+   ]
+  },
+  "hazard_redvapor": {
+   "rho": {
+    "tabpfn": 0.49083788075986245,
+    "knn": 0.5268700415322275
+   },
+   "auc_hot": {
+    "tabpfn": 0.8848184869917546,
+    "knn": 0.876421531199062
+   },
+   "n": [
+    48,
+    48
+   ]
+  },
+  "hazard_orebro": {
+   "rho": {
+    "tabpfn": 0.2393162393162393,
+    "knn": 0.1978021978021978
+   },
+   "auc_hot": {
+    "tabpfn": 0.625,
+    "knn": 0.5972222222222221
+   },
+   "n": [
+    60,
+    60
+   ]
+  },
+  "hazard_uci": {
+   "rho": {
+    "tabpfn": 0.7653135124833237,
+    "knn": 0.7284613678895537
+   },
+   "auc_hot": {
+    "tabpfn": 0.9826388888888888,
+    "knn": 0.9435763888888888
+   },
+   "n": [
+    18,
+    18
+   ]
+  },
+  "cfd_solve_s": {
+   "median": 92.935,
+   "n": 4
+  }
+ },
+ "results": {
+  "plants": 15,
+  "unseen": 10,
+  "nearest_s": 0.5,
+  "via_s": 0.09,
+  "unseen_nearest_s": 0.63,
+  "unseen_via_s": 0.06,
+  "exposed": [
+   5.0,
+   1.8
+  ],
+  "p95": [
+   3.8,
+   0.6
+  ],
+  "out95": [
+   42,
+   41
+  ],
+  "alarm_s": 5,
+  "worst_person": [
+   24,
+   2
+  ]
+ },
+ "sources": {
+  "source_2d": "docs/status/rayan.md (location study: 199 held-out leaks x 7 moments; size study)",
+  "hazard_2d": "src/tabpfn_spatial/hazard/DIFFUSIVITY_STUDY.md and THRESHOLD_STUDY.md (test set)",
+  "planner_2d": "uv run evac-shapes, outputs/shapes/runs.jsonl: the 24 leaks run with all three model settings (paired); mean and standard error (ddof=1)",
+  "factory_3d": "uv run evac-final, cloud and --backend baseline runs on the same 9 plants (docs/results/final-table.md)",
+  "real": "docs/figures/final/real_data_comparison.json (3D study: Red:Vapor, SRGDM, Orebro, UCI)",
+  "results": "docs/results/final-table.md (15 plants incl. 6 unseen plants run separately)"
+ }
+}

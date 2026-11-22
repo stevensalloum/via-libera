@@ -12,22 +12,25 @@ uv run via-libera            # opens the story page; nothing computed, no tokens
 - Backup if the laptop fails: the same command on Rayan's or Ahmad's laptop (the saved run
   ships in `demo/`), or the gallery: `uv run gallery Final`.
 
-## The pitch, screen by screen (1 min product + 2 min technical)
+## The video, scene by scene
 
-| Time | Say | Show |
+`uv run via-libera` opens the scenes in this order; **→ / space** next, **←** back, **C** shows
+the face-cam frame (bottom right is kept free on every scene), **H** hides the navigation.
+
+| Scene | Say | On screen |
 |---|---|---|
-| 0:00 | A gas leak, 300 people, one minute. | Story page, top (hero). |
-| 0:10 | Today: green signs to the nearest exit, even into the cloud. | Scroll to **2 · Today**: the shortest-path table (0.50 s → 0.09 s, −83 %). |
-| 0:25 | Via Libera: every person their own way out, live. | **3 · Live map**: Play; person 204 (selected first): red 24 s in gas, green 2 s. |
-| 0:45 | Where it goes: robots as detectors, phones and signs as displays. | **8 · Next**. |
-| 1:00 | How: three TabPFN models, no training. | **4 · How**: the three steps vs the usual method. |
-| 1:30 | In 3D: light gas rises, heavy gas sinks; detectors climb the pipes. | **Enter the factory**: Play, click a person, **Person view**. |
-| 2:15 | Why TabPFN: 3.5x closer to the leak than k-NN, no training, physics in minutes not hours. | Back to the story: **6 · Why TabPFN**. |
-| 2:40 | Results on 10 plants it never saw: −90 % time in gas. Next: wider hazard map, faster updates. | **7 · Results**, **8 · Next**. |
-
-Be honest if asked: the hazard model is precise (no false alarms) but too narrow (26 % of
-harmful cells at P >= 0.5); a model update takes about 33 s on the largest hall (asked every
-15 s, the planner uses the latest finished one); one leak per plant.
+| (0) | generated clip, 10 s (edited in) | — |
+| 1 · Via Libera | the name: Italian "the way is clear" | logo |
+| 2 · Vision | smart factories first; then robots and drones for logistics and maintenance | live 3D factory behind the text |
+| 3 · System | detectors → source → hazard → routing → people and robots, every 15 s | flow chart (hover a block) |
+| 4 · Source (2D) | sensor history in, source map out; TabPFN vs k-NN vs centroid | error over time, release-rate error |
+| 5 · Hazard (2D) | P(toxic) per cell; TabPFN vs forward physics | Brier across mixing, operating points |
+| 6 · Routing (2D) | CCRP on length + w·P(harm); TabPFN gives P(harm), not the search | seconds in gas: baseline / TabPFN / perfect vs nearest exit |
+| 7 · 3D | same metrics in 3D; leak height too | source error in 3D, exposure in 3D |
+| 8 · Real data | only four public datasets; TabPFN still transfers | source error and AUC on real data |
+| 9 · Demo | one worker, three plans | live map (Play); "Person view in 3D" for the first-person shot |
+| 10 · Results | −83 % time in gas, −90 % unseen, −64 % exposed, no slower | counters |
+| 11 · Future | models, guidance, real sites, robots and drones, interfaces | cards |
 
 ## Recordings (screen recording: Cmd+Shift+5 on a Mac, "Record selected portion")
 

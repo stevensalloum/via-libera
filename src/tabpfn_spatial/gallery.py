@@ -39,11 +39,11 @@ SECTIONS = (
         ("shapes", "gains.png", "What the gas-aware planners save, per plant shape."),
     ]),
     ("4 · How: three steps, each a TabPFN model", [
-        ("rayan", "height3d-3-tabpfn-vs-knn.png", "1 · Find the leak (Rayan): position and "
+        ("rayan", "height3d-3-tabpfn-vs-knn.png", "1 · Source localisation: position and "
                                                     "height from the detectors."),
-        ("ahmad", "08-hazard-3d.png", "2 · Predict the gas (Ahmad): where it will be harmful, "
+        ("ahmad", "08-hazard-3d.png", "2 · Hazard forecast: where the air will be harmful, "
                                       "in 3D."),
-        ("steven", "05-crowd-ladder.png", "3 · Route everyone (Steven): CCRP plans every "
+        ("steven", "05-crowd-ladder.png", "3 · Crowd routing: CCRP plans every "
                                           "person around the predicted gas."),
         ("steven", "04-sync-timeline.png", "The loop: detectors every 5 s, models every 15 s."),
     ]),
@@ -126,7 +126,7 @@ def collect(root: Path) -> dict:
     for run in sorted(PIPELINE.glob("*/video.mp4")):  # 2D single-person runs
         dst = root / "videos" / f"2d-{run.parent.name}.mp4"
         shutil.copy(run, dst)
-        cap = "One person, the team's models back to back (2D)."
+        cap = "One person, the TabPFN models back to back (2D)."
         title = f"2D · {run.parent.name}"
         out["videos"].append({"path": dst.relative_to(root), "title": title, "caption": cap})
     return out

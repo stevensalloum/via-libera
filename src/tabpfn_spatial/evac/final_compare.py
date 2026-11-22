@@ -37,7 +37,7 @@ METHODS = (("nearest", "Today: nearest exit\n(no model)", "#e34948"),
            ("perfect", "CCRP +\nperfect knowledge", "#12355b"))  # fmt: skip
 TABPFN, KNN = "#f39200", "#8ba3b8"
 INK, MUTED, GRID = "#0b1622", "#5b6f82", "#dde4ea"
-TRAIN_LEAKS = 200  # training leaks per model in evac-final (Rayan's and Ahmad's tables)
+TRAIN_LEAKS = 200  # training leaks per model in evac-final
 SIM_S = 2.5  # s per 3D training leak with our calibrated physics (gas3d, measured)
 
 
@@ -231,7 +231,7 @@ def stress(rows: list[dict], out: Path) -> Path:
     path = out / "5-stress.png"
     if not rows:
         return _placeholder(path, "The hard case: low leaks near people, updates every 5 s",
-                            "pending: evac-final --stress (Rayan's run)")  # fmt: skip
+                            "pending: evac-final --stress")  # fmt: skip
     pols = (("nearest", "nearest exit", "#e34948"), ("once", "CCRP planned once", "#8ba3b8"),
             ("ccrp", "CCRP replanned live", "#f39200"))  # fmt: skip
     fig, ax = plt.subplots(figsize=(8, 3.8))

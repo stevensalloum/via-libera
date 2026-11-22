@@ -307,4 +307,25 @@ window.__record = async ({ name, planner = "ccrp", speed = 3, cine = true, perso
   return recordVideo(replay, null, name);
 };
 window.__world = { scene, nav, camera, parts, replay };  // for debugging in the console
+// URL options (the story page links here): ?embed=1 the factory as a moving background (no
+// panels, cinematic camera, looping); ?person=<i>&pview=1&solo=1 straight into one worker.
+{
+  const q = new URLSearchParams(location.search);
+  if (replay && q.get("embed")) {
+    document.body.classList.add("embed");
+    for (const id of ["panel", "replay", "minimap", "minilegend"]) { const n = document.getElementById(id); if (n) n.style.display = "none"; }
+    labelRenderer.domElement.style.display = "none";
+    replay.cinematic = true;
+    replay.playing = true;
+    setInterval(() => { if (!replay.playing) { replay.t = 0; replay.playing = true; } }, 1000);
+  }
+  if (replay && q.get("person") !== null) {
+    replay.select(+q.get("person"));
+    replay.follow = true;
+    replay.personView = q.get("pview") === "1";
+    replay.solo = q.get("solo") === "1";
+    replay.speed = 2;
+    replay.playing = true;
+  }
+}
 $("loading").remove();
