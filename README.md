@@ -82,6 +82,8 @@ uv run evac-final --backend cloud --stress --leaks 1 --unseen 1 --n-train 100  #
 uv run evac-compare                                       # figures -> docs/figures/final
 ```
 
+Full presentation guide (pitch timing, shot list, backups): [docs/presentation.md](docs/presentation.md).
+
 ### More views
 
 | Command | What it shows |
