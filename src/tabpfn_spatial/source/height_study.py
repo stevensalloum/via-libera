@@ -77,6 +77,14 @@ class Result:
         """Median |predicted - true| height per moment in ``WS``."""
         return np.array([np.median(np.abs(self.med - self.z)[self.w == w]) for w in WS])
 
+    def mae(self) -> np.ndarray:
+        """Mean |predicted - true| height per moment in ``WS``.
+
+        Use this when heights come in look-alike pairs (the 3D simulator's 1 m voxels): a
+        model that picks one of two equal answers is 0 or 0.5 m off, and the median hides it.
+        """
+        return np.array([np.mean(np.abs(self.med - self.z)[self.w == w]) for w in WS])
+
     def coverage(self) -> np.ndarray:
         """Share of true heights inside the 80 % interval, per moment."""
         inside = (self.lo <= self.z) & (self.z <= self.hi)
