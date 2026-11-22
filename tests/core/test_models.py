@@ -131,3 +131,36 @@ def test_cloud_factory_uses_tabpfn_client(monkeypatch: pytest.MonkeyPatch) -> No
     m = make_regressor("cloud", n_estimators=4, guard=None)
     assert isinstance(m, TabPFNRegressorAdapter)
     assert m.estimator.kwargs == {"n_estimators": 4}
+
+
+def test_rate_limited_calls_are_retried(monkeypatch) -> None:
+    import tabpfn_spatial.core.models as m
+
+    monkeypatch.setattr("time.sleep", lambda s: None)
+    calls = []
+
+    def flaky() -> str:
+        calls.append(1)
+        if len(calls) < 3:
+            raise RuntimeError(
+                "Fail to call predict: [HTTP 429] Rate limit exceeded. Retry in 10s."
+            )
+        return "ok"
+
+    assert m.with_retry(flaky) == "ok" and len(calls) == 3
+
+
+def test_other_errors_are_not_retried() -> None:
+    import pytest
+
+    import tabpfn_spatial.core.models as m
+
+    calls = []
+
+    def broken() -> None:
+        calls.append(1)
+        raise ValueError("bad input")
+
+    with pytest.raises(ValueError):
+        m.with_retry(broken)
+    assert len(calls) == 1
