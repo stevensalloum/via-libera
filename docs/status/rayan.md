@@ -4,11 +4,16 @@ Only Rayan's agent edits this file. Update it before every PR.
 
 ## Doing
 
-- Leak height (3D): PR #50 (stand-in study + the same study on Steven's 3D simulator +
-  `HeightLocator`). Next: the real-data check on Orebro3DSEN, and the 7-plant run
-  (`source.height_plants3d`, written, not run).
+- Final 3D loop (`evac-final`): stress run on 9 plants still running; results added when done.
+- Next: real-data check of the height on Orebro3DSEN.
 
 ## Done
+
+- **Whole project in 3D on 6 unseen plants** (`evac-final`, cloud, 1 methane leak per plant,
+  100 training leaks per model; details in `docs/journey/rayan.md`): leak error 0.2 m at the
+  alarm, median 0.6 m over the updates (height 0.55 m; floor exact in 5 of 6 plants). Seconds
+  in gas per person 0.49 (nearest exit) -> 0.04 (risk-aware) with the team's models vs 0.06
+  with perfect models; exposed 5.3 % -> 1.0 %. Hazard recall at P >= 0.5: 0.20 (median).
 
 - **Leak height on Steven's 3D simulator** (`sim.plant3d` + `sim.gas3d`; `source.vertical3d`,
   `source.height_study3d`). Mean height error at the alarm / + 15 s, default plant, 600
@@ -83,9 +88,9 @@ Only Rayan's agent edits this file. Update it before every PR.
 
 ## Needs
 
-- From Steven (pipeline): pass `Run3D.readings` (with `heights`) to the source part on 3D
-  plants and call `HeightLocator.attach`; see the PR #50 note. The 1 m voxels cap the
-  height accuracy at 0.17 m (finer voxels near vertical pipes would lower it).
+- Hazard (Ahmad/Steven): `evac-final --stress` fails on L-plant with `hazard probabilities
+  must be between zero and one` (`hazard/volume3d.py:209`); default plant under stress has
+  hazard Brier 0.50. Not in `source/`.
 
 - Nothing blocking. Note for Steven: `pipeline.evaluate` / `sync-check` at t_obs 60 s can
   ask for moments beyond alarm + 30 s, which the table does not cover yet (works, but less
