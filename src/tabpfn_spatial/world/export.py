@@ -27,9 +27,14 @@ _KINDS = (
     ("generator", "generator"),
     ("dryer", "drum"),
     ("mixer", "drum"),
+    ("conveyor", "conveyor"),
+    ("rack", "rack"),
+    ("robot", "robot"),
+    ("cnc", "cnc"),
 )
 HEIGHTS = {"tank": 6.5, "furnace": 5.0, "compressor": 2.6, "press": 3.6, "generator": 3.0,
-           "drum": 3.4, "machine": 2.5}  # fmt: skip
+           "drum": 3.4, "machine": 2.5, "conveyor": 1.1, "rack": 5.5, "robot": 2.4,
+           "cnc": 2.3}  # fmt: skip
 HALL_HEIGHT = 9.0  # m, eaves of the hall
 PIPE_HEIGHT = 4.2  # m, overhead gas pipe rack
 
@@ -88,8 +93,99 @@ def _machine_mask(f: Factory) -> np.ndarray:
 
 
 def wall_runs(f: Factory) -> list[dict]:
-    """Inner walls: solid cells that are not machines, as straight runs."""
-    return _runs(f.walls & ~_machine_mask(f), f.cell)
+    """Inner walls: solid cells that are not machines (nor outside the building), as runs."""
+    inner = f.walls & ~_machine_mask(f)
+    if f.outside is not None:
+        inner &= ~f.outside
+    return _runs(inner, f.cell)
+
+
+def _inside(f: Factory) -> np.ndarray:
+    return np.ones(f.walls.shape, dtype=bool) if f.outside is None else ~f.outside
+
+
+def outline(f: Factory) -> list[dict]:
+    """Outer walls of a shaped plant, as straight runs.
+
+    Cell edges between inside and outside, merged along their line; ``normal`` points out
+    of the building. O(ny * nx).
+    """
+    inside = _inside(f)
+    pad = np.pad(inside, 1, constant_values=False)
+    c = f.cell
+    runs = []
+    # (dy, dx) of the outside neighbour -> outward normal (x, y)
+    for (dy, dx), normal in (((-1, 0), (0, -1)), ((1, 0), (0, 1)), ((0, -1), (-1, 0)),
+                             ((0, 1), (1, 0))):  # fmt: skip
+        nb = pad[1 + dy : pad.shape[0] - 1 + dy, 1 + dx : pad.shape[1] - 1 + dx]
+        edge = inside & ~nb
+        if dx == 0:  # horizontal edges: merge along x
+            for iy in range(f.ny):
+                ix = 0
+                while ix < f.nx:
+                    if edge[iy, ix]:
+                        j = ix
+                        while j + 1 < f.nx and edge[iy, j + 1]:
+                            j += 1
+                        y = (iy + (1 if dy > 0 else 0)) * c
+                        runs.append({"from": [ix * c, y], "to": [(j + 1) * c, y], "normal": normal})
+                        ix = j + 1
+                    else:
+                        ix += 1
+        else:  # vertical edges: merge along y
+            for ix in range(f.nx):
+                iy = 0
+                while iy < f.ny:
+                    if edge[iy, ix]:
+                        j = iy
+                        while j + 1 < f.ny and edge[j + 1, ix]:
+                            j += 1
+                        x = (ix + (1 if dx > 0 else 0)) * c
+                        runs.append({"from": [x, iy * c], "to": [x, (j + 1) * c], "normal": normal})
+                        iy = j + 1
+                    else:
+                        iy += 1
+    return runs
+
+
+def _exit_info(f: Factory, xy: np.ndarray) -> dict:
+    """Exit position, the outer wall it sits in (``side``) and its outward normal."""
+    if f.outside is None:
+        side = _side(f, xy)
+        normal = {"west": (-1, 0), "east": (1, 0), "south": (0, -1), "north": (0, 1)}[side]
+        return {"xy": xy.tolist(), "side": side, "normal": normal}
+    iy, ix = f.cell_of(xy)
+    inside = _inside(f)
+    sides = (((0, -1), (-1, 0), "south"), ((0, 1), (1, 0), "north"),
+             ((-1, 0), (0, -1), "west"), ((1, 0), (0, 1), "east"))  # fmt: skip
+    for normal, (dy, dx), side in sides:
+        ny_, nx_ = iy + dy, ix + dx
+        if not (0 <= ny_ < f.ny and 0 <= nx_ < f.nx) or not inside[ny_, nx_]:
+            return {"xy": xy.tolist(), "side": side, "normal": normal}
+    return {"xy": xy.tolist(), "side": _side(f, xy), "normal": (0, -1)}
+
+
+def leak_heights(f: Factory) -> list[float]:
+    """Height (m) of each leak site.
+
+    The overhead rack, or the machine inlet where a fitting next to a machine drops down to
+    feed it (the drop the viewer draws).
+    """
+    out = []
+    mask = f.pipes & ~f.walls if f.pipes is not None else None
+    if mask is None:
+        return [0.0] * len(f.leak_sites)
+    fit = f.fittings if f.fittings is not None else np.zeros_like(mask)
+    for iy, ix in np.argwhere(mask):
+        x, y = f.centre(int(iy), int(ix))
+        z = PIPE_HEIGHT
+        if fit[iy, ix]:
+            for m in f.machines:
+                if m.x0 - 2.2 < x < m.x1 + 2.2 and m.y0 - 2.2 < y < m.y1 + 2.2:
+                    z = min(1.6, HEIGHTS[kind_of(m.name)] * 0.6)
+                    break
+        out.append(float(z))
+    return out
 
 
 def pipe_runs(f: Factory) -> list[dict]:
@@ -136,6 +232,14 @@ def scene(f: Factory, people: int = 0, seed: int = 0) -> dict:
         "leak_sites": f.leak_sites.tolist(),
         "ignition": cells(f.ignition),
         "sensors": f.sensors.tolist(),
-        "exits": [{"xy": e.tolist(), "side": _side(f, e)} for e in f.exits],
+        "exits": [_exit_info(f, e) for e in f.exits],
         "people": crowd.tolist(),
+        "leak_z": leak_heights(f),
+        "name": f.name,
+        "gas": f.gas,
+        "shaped": f.outside is not None,
+        "outside": None if f.outside is None else f.outside.astype(int).tolist(),
+        "wings": [list(w) for w in f.wings],
+        "outline": outline(f) if f.outside is not None else [],
+        "agv_lanes": [lane.tolist() for lane in f.agv_lanes],
     }

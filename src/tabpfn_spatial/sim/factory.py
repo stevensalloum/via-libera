@@ -42,6 +42,12 @@ class Factory:
     sensors: np.ndarray  # (k, 2) metres, on open cells
     pipes: np.ndarray | None = None  # (ny, nx) bool: cells a gas pipe runs over
     fittings: np.ndarray | None = None  # (ny, nx) bool: joints on the pipes (subset)
+    # Shaped plants (sim.layouts); the defaults keep rectangular plants unchanged.
+    outside: np.ndarray | None = None  # (ny, nx) bool: cells outside the building (solid)
+    wings: tuple[tuple[float, float, float, float], ...] = ()  # building rectangles (m)
+    agv_lanes: tuple[np.ndarray, ...] = ()  # closed AGV loops, (n, 2) cell centres (m)
+    gas: str = "methane"  # what the pipes carry (sim.gases.GASES)
+    name: str = ""
 
     @property
     def ny(self) -> int:

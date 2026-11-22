@@ -19,13 +19,13 @@ import numpy as np
 from tabpfn_spatial.evac.crowd import CrowdParams, sample_workers
 from tabpfn_spatial.evac.crowd_plan import PLANNERS
 from tabpfn_spatial.evac.crowd_run import make_models, prepare, run_crowd
-from tabpfn_spatial.evac.crowd_study import RUNGS
+from tabpfn_spatial.evac.crowd_study import find_rung
 from tabpfn_spatial.sim import sample_scenarios
 
 
 def run(rung_name: str, seed: int, backend: str, record: bool = False):
     """(prepared, results per planner) for one emergency with the team's TabPFN models."""
-    rung = next(r for r in RUNGS if r.name == rung_name)
+    rung = find_rung(rung_name)
     f = rung.plant()
     rng = np.random.default_rng(seed)
     sc = sample_scenarios(f, 1, rng)[0]
@@ -49,7 +49,7 @@ def main() -> int:
     p.add_argument("--gif", type=Path)
     a = p.parse_args()
     if a.backend == "cloud" and not a.yes:
-        rung = next(r for r in RUNGS if r.name == a.rung)
+        rung = find_rung(a.rung)
         updates = int(rung.t_max / rung.update_s)
         print(f"cloud run: up to {updates} updates x ~3 TabPFN calls >= {updates * 30_000:,} "
               "tokens. Re-run with --yes to spend them.")  # fmt: skip

@@ -101,10 +101,10 @@ def main() -> int:
     if a.keep:
         print("serving", a.out)
     elif a.replay:
-        from tabpfn_spatial.evac.crowd_study import RUNGS
+        from tabpfn_spatial.evac.crowd_study import find_rung
         from tabpfn_spatial.world.replay import make_replay
 
-        rung = next(r for r in RUNGS if r.name == a.rung)
+        rung = find_rung(a.rung)
         print(f"running {rung.label}, leak {a.leak}, models {a.models} (about a minute)...")
         print("replay:", write_replay(make_replay(rung, a.leak, a.models, a.backend), a.out))
     else:
