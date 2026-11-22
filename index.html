@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Via Libera</title>
+<link rel="icon" href="logo.webp" />
+<link rel="stylesheet" href="story.css" />
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#name"><img src="logo.webp" alt="" /> VIA LIBERA</a>
+  <a class="pill" id="enter-top" href="factory.html">▶ Enter the factory</a>
+</header>
+<nav class="rail" id="rail" aria-label="Scenes"></nav>
+<div class="hud"><span id="scene-no"></span> · <kbd>←</kbd> <kbd>→</kbd> · <kbd>C</kbd> camera frame</div>
+<div class="camframe" id="camframe" hidden>face cam</div>
+
+<main id="deck">
+  <!-- 1 · name ------------------------------------------------------------------------- -->
+  <section id="name" class="scene center" data-title="Via Libera">
+    <img class="hero-logo" src="logo.webp" alt="Via Libera" />
+    <p class="kicker">Italian · <i>via</i> = way, <i>libera</i> = free</p>
+    <h1>“The way is clear.”</h1>
+    <p class="sub">Gas-aware evacuation: locate the leak, forecast the hazard,<br />route every person around it.</p>
+  </section>
+
+  <!-- 2 · vision ----------------------------------------------------------------------- -->
+  <section id="vision" class="scene bleed" data-title="Vision">
+    <video class="bg" src="media/3d-B-ccrp.mp4" autoplay muted loop playsinline></video>
+    <div class="shade-left"></div>
+    <div class="over">
+      <p class="kicker">Vision</p>
+      <h2>Safe routes for everything<br />that moves inside a plant.</h2>
+      <ol class="road">
+        <li><b>Smart factories</b><span>every worker gets a personal way out, updated as the gas moves</span></li>
+        <li><b>Robots</b><span>logistics and maintenance robots reroute, stop, or act as mobile gas sensors</span></li>
+        <li><b>Drones</b><span>inspection drones fly to the leak and map the cloud in 3D</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- 3 · flow ------------------------------------------------------------------------- -->
+  <section id="flow" class="scene" data-title="System">
+    <p class="kicker">System overview</p>
+    <h2>Three models, one loop, every 15 s.</h2>
+    <svg id="flowchart" viewBox="0 0 1200 360" role="img" aria-label="Pipeline"></svg>
+    <p class="cap" id="flow-cap">Hover a block.</p>
+  </section>
+
+  <!-- 4 · source ----------------------------------------------------------------------- -->
+  <section id="source" class="scene" data-title="1 · Source">
+    <p class="kicker">Step 1 · Source localisation (2D)</p>
+    <h2>Where is the leak, and how strong?</h2>
+    <div class="split">
+      <div class="explain">
+        <p><b>Input</b> · sensor history: the readings of every gas sensor over the last 30 s, and the wind.</p>
+        <p><b>Output</b> · probability of each floor cell being the source; release-rate quantiles.</p>
+        <p><b>TabPFN</b> · classifies the source zone in context from 1,200 simulated leaks of the same plant. No gradient training.</p>
+        <p><b>Baselines</b> · prior (uniform over the pipes), concentration-weighted centroid of the sensors, k-nearest neighbours on the same rows.</p>
+        <div class="kpis"><div><b>0.7 m</b><span>TabPFN</span></div><div><b>2.5 m</b><span>k-NN</span></div><div><b>8.5 m</b><span>centroid</span></div></div>
+      </div>
+      <div class="tabs" id="t-source"><nav><button data-tab="0" class=on>Accuracy</button><button data-tab="1">What the sensors see</button></nav><div class="panel"><div class="charts"><div class="chart" id="c-source-err"></div><div class="chart small" id="c-source-size"></div></div></div><div class="panel" hidden><figure class="media"><img src="figures/final/2d-gas-timelapse.png" alt="" loading="lazy" /><figcaption>A pipe leak spreading with the wind, 10 to 120 s (log concentration). Squares: gas sensors; star: leak; white: toxic limit; red: flammable range.</figcaption></figure></div></div>
+    </div>
+  </section>
+
+  <!-- 5 · hazard ----------------------------------------------------------------------- -->
+  <section id="hazard" class="scene" data-title="2 · Hazard">
+    <p class="kicker">Step 2 · Hazard forecast (2D)</p>
+    <h2>Where will the air be harmful in the next minute?</h2>
+    <div class="split">
+      <div class="explain">
+        <p><b>Input</b> · per cell: down- and cross-wind distance to the estimated source, time, wind, release rate, mixing.</p>
+        <p><b>Output</b> · P(toxic) and P(flammable) per cell, 0–120 s ahead.</p>
+        <p><b>TabPFN</b> · regresses the concentration distribution in context; probabilities come from its predictive quantiles.</p>
+        <p><b>Baseline · deterministic physics</b> · the same advection–diffusion model that generates the plumes, run once from the estimated source at nominal mixing. One answer, no uncertainty.</p>
+        <p class="why">TabPFN matches it where its assumptions hold and beats it when the mixing differs (left and right of the chart). Real gas never matches a model's assumptions exactly, which is where a learned, probabilistic forecast pays off.</p>
+      </div>
+      <div class="tabs" id="t-hazard"><nav><button data-tab="0" class=on>Accuracy</button><button data-tab="1">Forecast maps</button></nav><div class="panel"><div class="charts"><div class="chart" id="c-hazard-brier"></div><div class="chart small" id="c-hazard-roc"></div></div></div><div class="panel" hidden><figure class="media"><video src="media/2d-pipeline-wind_drift.mp4" muted loop playsinline preload="metadata"></video><figcaption>Drifting wind: the forecast maps (right) follow the gas; dashed red: forecast harmful area in 30 s.</figcaption></figure></div></div>
+    </div>
+  </section>
+
+  <!-- 6 · planner ---------------------------------------------------------------------- -->
+  <section id="planner" class="scene" data-title="3 · Routing">
+    <p class="kicker">Step 3 · Crowd routing (2D)</p>
+    <h2>A personal route for everyone, around the forecast.</h2>
+    <div class="split">
+      <div class="explain">
+        <p><b>Algorithm</b> · CCRP: shortest paths on the floor graph with exit capacities, so people spread over doors instead of queueing in the cloud.</p>
+        <p><b>Use of TabPFN</b> · not inside the search. Each step into a cell costs <code>length + w · P(harm)</code>, with P(harm) from step 2. Replanned at every update.</p>
+        <p><b>Compared</b></p>
+        <ul class="defs">
+          <li><b style="color:#e34948">Today</b> · shortest path to the nearest exit, gas ignored (fixed signs).</li>
+          <li><b style="color:#3fc1e8">Baseline models</b> · the same planner fed by the classic pipeline: centroid source + deterministic physics forecast.</li>
+          <li><b style="color:#f39200">TabPFN models</b> · steps 1 and 2.</li>
+          <li><b style="color:#e6eef5">Perfect knowledge</b> · the true future gas (upper bound).</li>
+        </ul>
+      </div>
+      <div class="tabs" id="t-planner"><nav><button data-tab="0" class=on>Accuracy</button><button data-tab="1">One worker</button><button data-tab="2">Crowd</button></nav><div class="panel"><div class="charts"><div class="chart" id="c-planner"></div></div></div><div class="panel" hidden><figure class="media"><video src="media/2d-one-person.mp4" muted loop playsinline preload="metadata"></video><figcaption>Same worker, three plans: green replanned every update, orange planned once at the alarm, red shortest path to the nearest exit (dose 0.06 / 0.08 / 0.74).</figcaption></figure></div><div class="panel" hidden><figure class="media"><img src="figures/steven/06-crowd-run.png" alt="" loading="lazy" /><figcaption>A whole crowd on the same leak: nearest exit, risk-aware and CCRP side by side.</figcaption></figure></div></div>
+    </div>
+  </section>
+
+  <!-- 7 · 3D --------------------------------------------------------------------------- -->
+  <section id="three-d" class="scene" data-title="3D">
+    <p class="kicker">Scaling to 3D</p>
+    <h2>The same three steps in a 9 m high hall.</h2>
+    <div class="split">
+      <div class="explain">
+        <ul class="defs">
+          <li><b>Geometry</b> · 1 m voxels; machines, pipe racks (4.2 m) and vertical pipes with real heights.</li>
+          <li><b>Gas</b> · time-stepped 3D dispersion around walls and machines; light gas rises, heavy gas sinks near the leak; people breathe 0.5–2 m.</li>
+          <li><b>Sensors</b> · on walls at the gas's height, plus masts of three sensors on every vertical pipe.</li>
+          <li><b>Models</b> · the source model also returns the leak height; the hazard model predicts per voxel.</li>
+          <li><b>Test</b> · 9 plants, 4 never seen; same leaks for every method.</li>
+        </ul>
+        <div class="kpis"><div><b>3.5×</b><span>closer to the leak than k-NN</span></div><div><b>0.12 s</b><span>in gas per person (nearest exit 0.50 s)</span></div></div>
+      </div>
+      <div class="tabs" id="t-3d"><nav><button data-tab="0" class=on>Accuracy</button><button data-tab="1">Today vs Via Libera</button><button data-tab="2">Sensor masts</button><button data-tab="3">3D plumes</button><button data-tab="4">Height of the gas</button></nav><div class="panel"><div class="charts"><div class="chart" id="c-3d-skill"></div><div class="chart small" id="c-3d-exposure"></div></div></div><div class="panel" hidden><div class="duo-vid"><figure class="media"><video src="media/3d-B-nearest.mp4" muted loop playsinline preload="metadata"></video><figcaption>Today: shortest path to the nearest exit (magenta = in harmful gas).</figcaption></figure><figure class="media"><video src="media/3d-B-ccrp.mp4" muted loop playsinline preload="metadata"></video><figcaption>Via Libera: routed around the forecast, same leak and people.</figcaption></figure></div></div><div class="panel" hidden><figure class="media"><img src="figures/rayan/height3d-2-detection-methane.png" alt="" loading="lazy" /><figcaption>Leak height from sensor masts on vertical pipes: error by sensor layout and model.</figcaption></figure></div><div class="panel" hidden><figure class="media"><img src="figures/rayan/height3d-1-data-methane.png" alt="" loading="lazy" /><figcaption>Simulated 3D plumes and what each sensor height reads over time.</figcaption></figure></div><div class="panel" hidden><figure class="media"><img src="figures/3d-study/heights.png" alt="" loading="lazy" /><figcaption>How far from a leak the gas density still decides its height.</figcaption></figure></div></div>
+    </div>
+  </section>
+
+  <!-- 8 · real data -------------------------------------------------------------------- -->
+  <section id="real" class="scene" data-title="Real data">
+    <p class="kicker">Generalisation to real measurements</p>
+    <h2>Few public gas-leak datasets exist. TabPFN still transfers.</h2>
+    <div class="split">
+      <div class="explain">
+        <p>Four public datasets, each used only as test data:</p>
+        <ul class="defs">
+          <li><b>1:50 industrial site</b> · wind-tunnel fog plume, Red:Vapor.</li>
+          <li><b>Sensor grid</b> · 6 × 5 grid with measured airflow, SRGDM.</li>
+          <li><b>Office</b> · 27 sensors at 3 heights with HVAC, Örebro.</li>
+          <li><b>MOX tunnel</b> · metal-oxide sensors along and across a wind tunnel, UCI.</li>
+        </ul>
+        <div class="kpis"><div><b>−41 %</b><span>source error vs k-NN (0.38 vs 0.64 m)</span></div><div><b>3 / 3</b><span>datasets with higher hot-zone AUC</span></div></div>
+      </div>
+      <div class="tabs" id="t-real"><nav><button data-tab="0" class=on>Accuracy</button><button data-tab="1">1:50 site</button><button data-tab="2">Sensor grid</button><button data-tab="3">Office</button><button data-tab="4">Real vs simulated</button></nav><div class="panel"><div class="charts"><div class="chart" id="c-real-source"></div><div class="chart small" id="c-real-auc"></div></div></div><div class="panel" hidden><figure class="media"><img src="figures/3d-study/data_redvapor.png" alt="" loading="lazy" /><figcaption>Red:Vapor: real fog plume around a 1:50 industrial site.</figcaption></figure></div><div class="panel" hidden><figure class="media"><img src="figures/3d-study/data_srgdm.png" alt="" loading="lazy" /><figcaption>SRGDM: plumes from measured airflow on a real 6 × 5 sensor grid.</figcaption></figure></div><div class="panel" hidden><figure class="media"><img src="figures/3d-study/data_orebro.png" alt="" loading="lazy" /><figcaption>Örebro: real office with HVAC, 27 sensors at three heights.</figcaption></figure></div><div class="panel" hidden><figure class="media"><img src="figures/3d-study/profiles.png" alt="" loading="lazy" /><figcaption>Vertical concentration profiles: real measurements vs our simulation.</figcaption></figure></div></div>
+    </div>
+  </section>
+
+  <!-- 9a · demo 2D ------------------------------------------------------------------- -->
+  <section id="demo-2d" class="scene" data-title="Demo 2D">
+    <p class="kicker">Demonstration · 2D, cloud TabPFN</p>
+    <figure class="media demo2d"><video src="media/2d-pipeline-cloud.mp4" muted loop playsinline preload="auto"></video>
+      <figcaption>One worker evacuated while the source and hazard models run back to back on the cloud.</figcaption></figure>
+  </section>
+
+  <!-- 9 · demo ------------------------------------------------------------------------- -->
+  <section id="demo" class="scene" data-title="Demo">
+    <p class="kicker">Demonstration · one worker, three plans</p>
+    <div class="live">
+      <div class="live-map"><canvas id="map"></canvas>
+        <div class="live-bar"><button id="play" class="pill">▶ Play</button>
+          <input type="range" id="time" min="0" max="100" step="0.1" value="0" />
+          <span id="clock">0 s</span>
+          <label class="chk"><input type="checkbox" id="crowd" /> show crowd</label></div></div>
+      <aside class="live-side">
+        <div class="legend">
+          <div><i style="background:#1baf7a"></i>Via Libera, replanned every update</div>
+          <div><i style="background:#eda100"></i>planned once, at the alarm</div>
+          <div><i style="background:#e34948"></i>shortest path to the nearest exit</div>
+          <div><i style="background:#d628d2"></i>toxic now <i style="background:#e61e32;opacity:.6"></i>forecast <i class="ring"></i>source estimate</div>
+        </div>
+        <div id="person" class="person"></div>
+        <canvas id="pchart" width="380" height="150"></canvas>
+        <div id="status" class="status"></div>
+        <a class="pill" id="enter-person" href="factory.html">▶ Person view in 3D</a>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 10 · results --------------------------------------------------------------------- -->
+  <section id="results" class="scene" data-title="Results">
+    <p class="kicker">Results · 15 plants, 10 never seen, 3D gas, cloud TabPFN</p>
+    <h2>Fewer people in the gas on every kind of plant, as good as perfect knowledge.</h2>
+    <div class="results-grid">
+      <div class="chart" id="c-res-plants"></div>
+      <div class="res-side">
+        <div class="chart" id="c-res-gap"></div>
+        <div class="kpis"><div><b>14 / 15</b><span>plants with fewer people exposed</span></div><div><b>−64 %</b><span>people exposed (5.0 → 1.8 %)</span></div><div><b>−83 %</b><span>time in gas per person</span></div><div><b>no slower</b><span>95 % out: 42 → 41 s</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 · future ---------------------------------------------------------------------- -->
+  <section id="future" class="scene" data-title="Future">
+    <p class="kicker">Future work and development</p>
+    <h2>From a simulated hall to real plants, robots and drones.</h2>
+    <div class="future">
+      <div><b>Real data</b><span>larger real leak datasets with sensor logs and ground truth, from industrial partners and drills</span></div>
+      <div><b>3D simulation</b><span>CFD and gas-dispersion frameworks (OpenFOAM, GADEN) for the 3D training context, with real ventilation layouts</span></div>
+      <div><b>Edge cases</b><span>a leak at a door or on an escape route, blocked exits, several leaks, sensor failures</span></div>
+      <div><b>Sensor placement</b><span>optimise where gas sensors go so the leak is found fastest with the fewest sensors</span></div>
+      <div><b>Models</b><span>wider hazard forecast (3D recall 26 % at P ≥ 0.5); model updates under 15 s on large halls</span></div>
+      <div><b>Robots &amp; drones</b><span>robots as mobile gas sensors; safe routes for logistics and maintenance fleets; drones mapping the cloud</span></div>
+      <div><b>Interfaces</b><span>dynamic exit signs, phones and wearables showing each person's route; stay low or high depending on the gas</span></div>
+    </div>
+  </section>
+</main>
+<script type="module" src="story.js"></script>
+</body>
+</html>

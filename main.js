@@ -1,0 +1,331 @@
+// 3D factory world: loads data/scene.json (exported by `uv run world`) and builds it.
+import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { Sky } from "three/addons/objects/Sky.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { SMAAPass } from "three/addons/postprocessing/SMAAPass.js";
+import { animateDetails } from "./details.js";
+import { CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer.js";
+import { Navigator } from "./controls.js";
+import { animateMachines } from "./machines.js";
+import { Replay, loadReplay, recordVideo, replayPanel } from "./replay.js";
+import { buildWorld } from "./world.js";
+
+// ?run=<folder> shows one run of the served folder (e.g. outputs/world/replay-T-...)
+const RUN = new URLSearchParams(location.search).get("run");
+const DATA = RUN ? `data/${encodeURIComponent(RUN)}/` : "data/";
+const scene = await (await fetch(`${DATA}scene.json`)).json();
+const app = document.getElementById("app");
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));  // laptop-friendly
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.75;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+app.appendChild(renderer.domElement);
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(innerWidth, innerHeight);
+labelRenderer.domElement.className = "labels";
+app.appendChild(labelRenderer.domElement);
+
+const world3d = new THREE.Scene();
+const span = Math.max(scene.width, scene.height);
+const sunDir = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(55), THREE.MathUtils.degToRad(-140));
+const sky = new Sky();  // physical sky (Preetham) with the same sun as the shadows
+sky.scale.setScalar(5000);
+sky.material.uniforms.turbidity.value = 5;
+sky.material.uniforms.rayleigh.value = 1.2;
+sky.material.uniforms.mieCoefficient.value = 0.004;
+sky.material.uniforms.mieDirectionalG.value = 0.8;
+sky.material.uniforms.sunPosition.value.copy(sunDir);
+world3d.add(sky);
+world3d.fog = new THREE.Fog("#c9d8e6", span * 3, span * 9);
+// Via Libera look (default): navy night background in the logo's colours; daylight sky on demand.
+function setTheme(day) {
+  sky.visible = day;
+  world3d.background = day ? null : new THREE.Color("#0b1622");
+  world3d.fog.color.set(day ? "#c9d8e6" : "#0b1622");
+  document.body.classList.toggle("day", day);
+}
+setTheme(false);
+const pmrem = new THREE.PMREMGenerator(renderer);
+world3d.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+world3d.add(new THREE.HemisphereLight("#eef4ff", "#5a5650", 0.55));
+const sun = new THREE.DirectionalLight("#fff1dc", 2.4);
+sun.position.copy(sunDir).multiplyScalar(span * 1.5);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+const sc = sun.shadow.camera;
+sc.left = sc.bottom = -span * 0.75;
+sc.right = sc.top = span * 0.75;
+sc.near = 1;
+sc.far = span * 4;
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.03;
+world3d.add(sun);
+
+const { root, parts, F } = buildWorld(scene);
+world3d.add(root);
+
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 12000);
+
+// Ambient occlusion and anti-aliasing (toggle "High quality" off on slow machines).
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(world3d, camera));
+const gtao = new GTAOPass(world3d, camera, innerWidth, innerHeight);
+gtao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1.5, scale: 1.0 });
+gtao.blendIntensity = 0.85;
+composer.addPass(gtao);
+composer.addPass(new OutputPass());
+composer.addPass(new SMAAPass(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio()));
+let highQuality = false;  // ambient occlusion is heavy: opt in
+const nav = new Navigator(camera, renderer.domElement, scene, F);
+const VIEWS = {
+  overview: () => [F.P(-scene.width * 0.15, -scene.height * 0.55, span * 0.55), F.P(scene.width / 2, scene.height / 2, 0)],
+  top: () => [F.P(scene.width / 2, scene.height / 2 - 0.01, span * 1.15), F.P(scene.width / 2, scene.height / 2, 0)],
+  inside: () => {
+    if (scene.agv_lanes && scene.agv_lanes.length) {  // an aisle: always open floor
+      const lane = scene.agv_lanes[0], a = lane[0], b = lane[Math.floor(lane.length / 4)];
+      return [F.P(a[0], a[1], 2.2), F.P(b[0], b[1], 1.8)];
+    }
+    return [F.P(scene.width * 0.1, scene.height * 0.15, 4.5), F.P(scene.width * 0.6, scene.height * 0.6, 2)];
+  },
+};
+const [p0, t0] = VIEWS.overview();
+camera.position.copy(p0);
+nav.orbit.target.copy(t0);
+
+// ------------------------------------------------------------------ panel and keys --
+const $ = (id) => document.getElementById(id);
+$("info").innerHTML =
+  (scene.name ? `<b>${scene.name}</b> (${scene.gas}) &middot; ` : "") +
+  `${scene.width} x ${scene.height} m &middot; ${scene.machines.length} machines ` +
+  `(${scene.machines.filter((m) => m.hot).length} hot) &middot; ${scene.sensors.length} gas sensors &middot; ` +
+  `${scene.exits.length} exits &middot; ${scene.leak_sites.length} leak sites on the gas pipes &middot; ` +
+  `${scene.people.length} workers` +
+  (scene.agv_lanes && scene.agv_lanes.length ? ` &middot; ${scene.agv_lanes.length * 2} AGVs` : "");
+for (const [id, fn] of Object.entries(VIEWS)) $(`view-${id}`).onclick = () => nav.flyTo(...fn());
+const goto = $("goto");
+scene.machines.forEach((m, i) => goto.add(new Option(`${m.name}${m.hot ? " (hot)" : ""}`, `m${i}`)));
+scene.exits.forEach((e, i) => goto.add(new Option(`exit E${i} (${e.side})`, `e${i}`)));
+goto.onchange = () => {
+  const v = goto.value;
+  if (!v) return;
+  const [x, y, h] = v[0] === "m"
+    ? (() => { const r = scene.machines[+v.slice(1)].rect; return [(r[0] + r[2]) / 2, (r[1] + r[3]) / 2, scene.machines[+v.slice(1)].height]; })()
+    : [...scene.exits[+v.slice(1)].xy, 2];
+  nav.flyTo(F.P(x - 8, y - 10, h + 8), F.P(x, y, h / 2));
+  goto.value = "";
+};
+const layer = (id, fn) => { $(id).onchange = (e) => fn(e.target.checked); fn($(id).checked); };
+layer("show-roof", (on) => { parts.roof.panels.visible = on; });
+layer("show-walls", (on) => { parts.outer.cladding.visible = on; });
+layer("show-frame", (on) => { parts.roof.frame.visible = on; });
+let labelsOn = true;
+const labelObjects = [];
+root.traverse((o) => { if (o.isCSS2DObject) labelObjects.push(o); });
+layer("show-labels", (on) => { labelsOn = on; });
+function cullLabels() {  // near the floor, only nearby labels (they would show through walls)
+  const low = camera.position.y < 4;
+  for (const o of labelObjects) {
+    o.visible = labelsOn && (!low || o.getWorldPosition(new THREE.Vector3()).distanceTo(camera.position) < 22);
+  }
+}
+layer("show-grid", (on) => { parts.grid.visible = on; });
+layer("show-overhead", (on) => { parts.overhead.visible = on; });
+layer("show-people", (on) => { parts.people.visible = on; });
+layer("high-quality", (on) => { highQuality = on; });
+layer("show-pipes", (on) => { parts.pipes.visible = on; });
+
+$("walk").onclick = () => {
+  // Start just inside the exit with the longest open run inwards, looking down that run.
+  let best = null;
+  for (const e of scene.exits) {
+    const n = e.normal || { west: [-1, 0], east: [1, 0], south: [0, -1], north: [0, 1] }[e.side];
+    let run = 0;
+    while (run < 60 && !nav.blocked(e.xy[0] - (run + 0.5) * n[0], e.xy[1] - (run + 0.5) * n[1])) run += 0.5;
+    if (!best || run > best.run) best = { e, n, run };
+  }
+  const { e, n, run } = best;
+  const d = Math.min(3, run / 2);
+  const [x, y] = [e.xy[0] - d * n[0], e.xy[1] - d * n[1]];
+  nav.startWalk(x, y, x - 10 * n[0], y - 10 * n[1]);
+};
+nav.walk.addEventListener("lock", () => { $("resume").hidden = true; });
+document.addEventListener("pointerlockerror", () => {  // lock refused: keys + drag still work
+  $("walkhelp").hidden = false;
+});
+$("orbit").onclick = () => nav.startOrbit();
+nav.walk.addEventListener("lock", () => { $("walkhelp").hidden = false; $("crosshair").hidden = false; $("show-walls").checked = true; parts.outer.cladding.visible = true; });
+nav.walk.addEventListener("unlock", () => { $("crosshair").hidden = true; $("walkhelp").hidden = nav.mode !== "walk"; if (nav.mode === "walk") $("resume").hidden = false; });
+$("resume").onclick = () => { $("resume").hidden = true; nav.walk.lock(); };
+addEventListener("keydown", (e) => {
+  if (e.code === "Digit1") nav.flyTo(...VIEWS.overview());
+  if (e.code === "Digit2") nav.flyTo(...VIEWS.top());
+  if (e.code === "KeyO" && nav.mode === "walk") { $("resume").hidden = true; $("walkhelp").hidden = true; nav.startOrbit(); }
+});
+
+// ------------------------------------------------------------------------ replay --
+const rep = await loadReplay(DATA);
+let replay = null, refreshReplay = null;
+if (rep) {
+  replay = new Replay(rep, world3d, F, parts);
+  refreshReplay = replayPanel(replay);
+  parts.people.visible = false;
+  $("show-people").checked = false;
+  document.body.classList.add("has-replay");
+}
+
+// ----------------------------------------------------------------------- minimap --
+const mini = $("minimap"), mg = mini.getContext("2d");
+const ms = Math.min((rep ? 400 : 240) / scene.width, (rep ? 270 : 160) / scene.height);
+mini.width = Math.round(scene.width * ms);
+mini.height = Math.round(scene.height * ms);
+const base = document.createElement("canvas");
+base.width = mini.width;
+base.height = mini.height;
+(() => {
+  const g = base.getContext("2d"), c = scene.cell * ms;
+  g.fillStyle = "#e9ecef";
+  g.fillRect(0, 0, base.width, base.height);
+  scene.solid.forEach((row, iy) => row.forEach((v, ix) => {
+    if (v) { g.fillStyle = "#59606a"; g.fillRect(ix * c, base.height - (iy + 1) * c, c + 0.5, c + 0.5); }
+  }));
+  for (const m of scene.machines) if (m.hot) {
+    g.strokeStyle = "#ff6a00"; g.lineWidth = 2;
+    g.strokeRect(m.rect[0] * ms, base.height - m.rect[3] * ms, (m.rect[2] - m.rect[0]) * ms, (m.rect[3] - m.rect[1]) * ms);
+  }
+  g.strokeStyle = "#e0b000"; g.lineWidth = 2;
+  for (const r of scene.pipes) {
+    g.beginPath(); g.moveTo(r.from[0] * ms, base.height - r.from[1] * ms); g.lineTo(r.to[0] * ms, base.height - r.to[1] * ms); g.stroke();
+  }
+  g.fillStyle = "#1e90ff";
+  for (const [x, y] of scene.sensors) g.fillRect(x * ms - 2, base.height - y * ms - 2, 4, 4);
+  g.fillStyle = "#12a150";
+  for (const e of scene.exits) { g.beginPath(); g.arc(e.xy[0] * ms, base.height - e.xy[1] * ms, 4, 0, 7); g.fill(); }
+})();
+mini.onclick = (ev) => {
+  const x = ev.offsetX / ms, y = (mini.height - ev.offsetY) / ms;
+  nav.flyTo(F.P(x - 6, y - 9, 9), F.P(x, y, 0));
+};
+if (rep) {  // legend over the map
+  const lg = document.createElement("div");
+  lg.id = "minilegend";
+  lg.innerHTML = [["#d628d2", "toxic gas"], ["#ffaa00", "above alarm"], ["#e61e32", "predicted danger"],
+    ["#19e3ff", "leak guess"], ["#ffffff", "leak (after alarm)"], ["#ff7a00", "people"]]
+    .map(([c, t]) => `<span><i style="background:${c}"></i>${t}</span>`).join("");
+  document.body.appendChild(lg);
+  const place = () => { lg.style.bottom = `${mini.height + 18}px`; lg.style.maxWidth = `${mini.width}px`; };
+  place();
+}
+$("back").href = `./${location.search}`;
+$("daylight").onchange = (e) => setTheme(e.target.checked);
+const panel = $("panel");
+panel.querySelector("h1").onclick = () => panel.classList.toggle("collapsed");
+if (rep) panel.classList.add("collapsed");
+function drawMinimap() {
+  mg.drawImage(base, 0, 0);
+  if (replay) replay.drawMini(mg, ms, mini.height);
+  const [x, y] = F.toFactory(camera.position);
+  const d = new THREE.Vector3();
+  camera.getWorldDirection(d);
+  const a = Math.atan2(-d.z, d.x);
+  mg.save();
+  mg.translate(x * ms, mini.height - y * ms);
+  mg.rotate(-a);
+  mg.fillStyle = "#d6204a";
+  mg.beginPath(); mg.moveTo(9, 0); mg.lineTo(-5, -5); mg.lineTo(-5, 5); mg.closePath(); mg.fill();
+  mg.restore();
+}
+
+// ------------------------------------------------------------------------- loop --
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  labelRenderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+});
+const clock = new THREE.Clock();
+const FRAME = 1 / 30;  // cap at 30 fps: smooth enough, half the GPU work
+let since = 0, frame = 0;
+renderer.setAnimationLoop(() => {
+  since += clock.getDelta();
+  if (since < FRAME) return;
+  const dt = Math.min(since, 0.1);
+  since = 0;
+  frame++;
+  if (replay && replay.follow && replay.followCamera(camera)) { /* camera follows the person */ }
+  else if (replay && replay.cinematic) cinematic(clock.elapsedTime);
+  else nav.update(dt);
+  animateMachines(parts.machines, clock.elapsedTime);
+  if (!replay) parts.agvs.drive(clock.elapsedTime);
+  animateDetails(parts.overhead, clock.elapsedTime);
+  if (frame % 6 === 0) cullLabels();
+  if (replay) { replay.update(dt); if (frame % 3 === 0) refreshReplay(); }
+  if (highQuality) composer.render(); else renderer.render(world3d, camera);
+  labelRenderer.render(world3d, camera);
+  drawMinimap();
+});
+// Cinematic camera for videos: a slow orbit, aimed between the plant centre and the leak.
+function cinematic(t) {
+  const leak = replay.rep.leak.xy, cx = (scene.width / 2 + leak[0]) / 2, cy = (scene.height / 2 + leak[1]) / 2;
+  const a = -2.3 + t * 0.05, r = span * 0.62, h = span * 0.38;
+  camera.position.copy(F.P(cx + r * Math.cos(a), cy + r * Math.sin(a), h));
+  camera.lookAt(F.P(cx, cy, 0));
+  nav.orbit.target.copy(F.P(cx, cy, 0));
+}
+
+// Click a person (orbit mode) to see their routes; a click without dragging only.
+let downAt = null;
+renderer.domElement.addEventListener("pointerdown", (e) => { downAt = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener("pointerup", (e) => {
+  if (!replay || !downAt || nav.mode !== "orbit") return;
+  if (Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4) return;
+  const ndc = new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  const ray = new THREE.Raycaster();
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObject(replay.bodies, false)[0] || ray.intersectObject(replay.heads, false)[0];
+  if (hit && hit.instanceId !== undefined) replay.select(hit.instanceId);
+});
+
+// Scripted recording (used to make the milestone videos): plays from the start and saves.
+window.__record = async ({ name, planner = "ccrp", speed = 3, cine = true, person = null, pview = false } = {}) => {
+  if (!replay) return null;
+  replay.planner = planner;
+  replay.speed = speed;
+  replay.cinematic = cine;
+  replay.select(person);
+  if (person !== null) { replay.follow = true; replay.personView = pview; }
+  return recordVideo(replay, null, name);
+};
+window.__world = { scene, nav, camera, parts, replay };  // for debugging in the console
+// URL options (the story page links here): ?embed=1 the factory as a moving background (no
+// panels, cinematic camera, looping); ?person=<i>&pview=1&solo=1 straight into one worker.
+{
+  const q = new URLSearchParams(location.search);
+  if (replay && q.get("embed")) {
+    document.body.classList.add("embed");
+    for (const id of ["panel", "replay", "minimap", "minilegend"]) { const n = document.getElementById(id); if (n) n.style.display = "none"; }
+    labelRenderer.domElement.style.display = "none";
+    replay.cinematic = true;
+    replay.playing = true;
+    setInterval(() => { if (!replay.playing) { replay.t = 0; replay.playing = true; } }, 1000);
+  }
+  if (replay && q.get("person") !== null) {
+    replay.select(+q.get("person"));
+    replay.follow = true;
+    replay.personView = q.get("pview") === "1";
+    replay.solo = q.get("solo") === "1";
+    replay.speed = 2;
+    replay.playing = true;
+  }
+}
+$("loading").remove();

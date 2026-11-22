@@ -1,0 +1,525 @@
+{
+ "source_2d": {
+  "t": [
+   0,
+   5,
+   10,
+   20,
+   30
+  ],
+  "error_m": {
+   "prior": [
+    17.1,
+    17.1,
+    17.1,
+    17.1,
+    17.1
+   ],
+   "centroid": [
+    6.2,
+    6.5,
+    7.1,
+    8.5,
+    9.1
+   ],
+   "knn": [
+    2.6,
+    2.3,
+    2.4,
+    2.5,
+    2.7
+   ],
+   "tabpfn": [
+    1.3,
+    0.7,
+    0.7,
+    0.7,
+    0.7
+   ]
+  },
+  "size_t": [
+   0,
+   10,
+   20,
+   30
+  ],
+  "size_error_pct": {
+   "prior": [
+    38,
+    38,
+    38,
+    38
+   ],
+   "knn": [
+    36,
+    24,
+    19,
+    18
+   ],
+   "tabpfn": [
+    26,
+    13,
+    9,
+    8
+   ]
+  },
+  "ece": {
+   "centroid": 0.06,
+   "knn": 0.3,
+   "tabpfn": 0.03
+  },
+  "n": "199 held-out leaks x 7 moments"
+ },
+ "hazard_2d": {
+  "diffusivity": [
+   0.2,
+   0.4,
+   0.8,
+   1.6,
+   3.2
+  ],
+  "brier": {
+   "forward": [
+    0.0572,
+    0.0478,
+    0.0403,
+    0.0407,
+    0.0648
+   ],
+   "tabpfn": [
+    0.0417,
+    0.0398,
+    0.0408,
+    0.0416,
+    0.0502
+   ]
+  },
+  "operating": {
+   "forward": [
+    83.5,
+    3.4
+   ],
+   "tabpfn_p50": [
+    65.8,
+    2.3
+   ],
+   "tabpfn_p19": [
+    88.3,
+    8.1
+   ]
+  },
+  "n": "40 held-out leaks x 5 mixing strengths"
+ },
+ "planner_2d": {
+  "n_leaks": 24,
+  "plants": 24,
+  "baseline/nearest": [
+   0.7290580443409148,
+   0.20854791106225373
+  ],
+  "baseline/risk": [
+   0.15721441810996364,
+   0.03306643788824772
+  ],
+  "baseline/ccrp": [
+   0.17868888229760563,
+   0.03131486557894254
+  ],
+  "loc/baseline": 8.595241580617241,
+  "tabpfn/nearest": [
+   0.7290580443409148,
+   0.20854791106225373
+  ],
+  "tabpfn/risk": [
+   0.08540329898849601,
+   0.012172929778570585
+  ],
+  "tabpfn/ccrp": [
+   0.08171740155259856,
+   0.01134612587147592
+  ],
+  "loc/tabpfn": 0.0,
+  "perfect/nearest": [
+   0.7290580443409148,
+   0.20854791106225373
+  ],
+  "perfect/risk": [
+   0.08987450950172156,
+   0.010141116048977055
+  ],
+  "perfect/ccrp": [
+   0.0925068733346961,
+   0.010211434448213798
+  ],
+  "loc/perfect": 0.0
+ },
+ "factory_3d": {
+  "plants": 9,
+  "tabpfn": {
+   "loc_err_median_m": 0.6313907306996938,
+   "height_err_m": 0.6313907306996938,
+   "hz_recall": 0.2610504839197298,
+   "hz_false": 0.0,
+   "hz_brier": 0.0701977287170704
+  },
+  "knn": {
+   "loc_err_median_m": 2.2045000000000003,
+   "height_err_m": 1.6250000000000002,
+   "hz_recall": 0.7586723138099324,
+   "hz_false": 0.020937129300118623,
+   "hz_brier": 0.05039624104468079
+  },
+  "exposure": {
+   "nearest": [
+    0.5013018194356211,
+    0.2289975601177691
+   ],
+   "knn": [
+    0.12301813318213939,
+    0.06229634641504575
+   ],
+   "tabpfn": [
+    0.11747246925100731,
+    0.04483963263598204
+   ],
+   "perfect": [
+    0.08237855074152328,
+    0.045344543143026945
+   ]
+  }
+ },
+ "real": {
+  "source_redvapor_m": {
+   "tabpfn": 0.3783588764303051,
+   "knn": 0.6419289540220916,
+   "n": [
+    56,
+    48
+   ]
+  },
+  "source_srgdm_cells": {
+   "tabpfn": 0.8320528493534897,
+   "knn": 1.4976761962286425,
+   "n": [
+    8,
+    8
+   ]
+  },
+  "hazard_redvapor": {
+   "rho": {
+    "tabpfn": 0.49083788075986245,
+    "knn": 0.5268700415322275
+   },
+   "auc_hot": {
+    "tabpfn": 0.8848184869917546,
+    "knn": 0.876421531199062
+   },
+   "n": [
+    48,
+    48
+   ]
+  },
+  "hazard_orebro": {
+   "rho": {
+    "tabpfn": 0.2393162393162393,
+    "knn": 0.1978021978021978
+   },
+   "auc_hot": {
+    "tabpfn": 0.625,
+    "knn": 0.5972222222222221
+   },
+   "n": [
+    60,
+    60
+   ]
+  },
+  "hazard_uci": {
+   "rho": {
+    "tabpfn": 0.7653135124833237,
+    "knn": 0.7284613678895537
+   },
+   "auc_hot": {
+    "tabpfn": 0.9826388888888888,
+    "knn": 0.9435763888888888
+   },
+   "n": [
+    18,
+    18
+   ]
+  },
+  "cfd_solve_s": {
+   "median": 92.935,
+   "n": 4
+  }
+ },
+ "results": {
+  "plants": 15,
+  "unseen": 10,
+  "nearest_s": 0.5,
+  "via_s": 0.09,
+  "unseen_nearest_s": 0.63,
+  "unseen_via_s": 0.06,
+  "exposed": [
+   5.0,
+   1.8
+  ],
+  "p95": [
+   3.8,
+   0.6
+  ],
+  "out95": [
+   42,
+   41
+  ],
+  "alarm_s": 5,
+  "worst_person": [
+   24,
+   2
+  ]
+ },
+ "sources": {
+  "source_2d": "docs/status/rayan.md (location study: 199 held-out leaks x 7 moments; size study)",
+  "hazard_2d": "src/tabpfn_spatial/hazard/DIFFUSIVITY_STUDY.md and THRESHOLD_STUDY.md (test set)",
+  "planner_2d": "uv run evac-shapes, outputs/shapes/runs.jsonl: the 24 leaks run with all three model settings (paired); mean and standard error (ddof=1)",
+  "factory_3d": "uv run evac-final, cloud and --backend baseline runs on the same 9 plants (docs/results/final-table.md)",
+  "real": "docs/figures/final/real_data_comparison.json (3D study: Red:Vapor, SRGDM, Orebro, UCI)",
+  "results": "docs/results/final-table.md (15 plants incl. 6 unseen plants run separately)",
+  "per_plant": "outputs/final/runs-cloud.jsonl (9 plants, CCRP) and docs/journey/rayan.md (6 unseen plants, % exposed, risk-aware planner; equal to CCRP there)"
+ },
+ "per_plant": [
+  {
+   "plant": "T-plant",
+   "split": "known",
+   "s": [
+    0.25663716814159293,
+    0.1504424778761062,
+    0.15486725663716813
+   ],
+   "exposed": [
+    3.0973451327433628,
+    3.0973451327433628,
+    3.0973451327433628
+   ],
+   "out95": [
+    39.0,
+    40.0
+   ]
+  },
+  {
+   "plant": "default",
+   "split": "known",
+   "s": [
+    0.49514563106796117,
+    0.42718446601941745,
+    0.4368932038834951
+   ],
+   "exposed": [
+    6.796116504854369,
+    5.825242718446602,
+    5.825242718446602
+   ],
+   "out95": [
+    33.0,
+    45.0
+   ]
+  },
+  {
+   "plant": "L-plant",
+   "split": "known",
+   "s": [
+    0.2222222222222222,
+    0.0,
+    0.0
+   ],
+   "exposed": [
+    5.314009661835748,
+    0.0,
+    0.0
+   ],
+   "out95": [
+    48.0,
+    40.0
+   ]
+  },
+  {
+   "plant": "U-plant",
+   "split": "known",
+   "s": [
+    0.1222707423580786,
+    0.09170305676855896,
+    0.1091703056768559
+   ],
+   "exposed": [
+    2.1834061135371177,
+    1.7467248908296942,
+    1.7467248908296942
+   ],
+   "out95": [
+    41.0,
+    42.0
+   ]
+  },
+  {
+   "plant": "campus",
+   "split": "known",
+   "s": [
+    0.043333333333333335,
+    0.02666666666666667,
+    0.016666666666666666
+   ],
+   "exposed": [
+    1.3333333333333335,
+    1.0,
+    1.0
+   ],
+   "out95": [
+    46.0,
+    45.0
+   ]
+  },
+  {
+   "plant": "L@150",
+   "split": "unseen",
+   "s": [
+    0.7360406091370558,
+    0.08121827411167512,
+    0.0
+   ],
+   "exposed": [
+    7.614213197969544,
+    4.060913705583756,
+    0.0
+   ],
+   "out95": [
+    38.0,
+    42.0
+   ]
+  },
+  {
+   "plant": "U@150",
+   "split": "unseen",
+   "s": [
+    0.05042016806722689,
+    0.0,
+    0.0
+   ],
+   "exposed": [
+    0.42016806722689076,
+    0.0,
+    0.0
+   ],
+   "out95": [
+    38.0,
+    35.0
+   ]
+  },
+  {
+   "plant": "T@150",
+   "split": "unseen",
+   "s": [
+    0.23333333333333334,
+    0.023809523809523808,
+    0.023809523809523808
+   ],
+   "exposed": [
+    3.3333333333333335,
+    0.4761904761904762,
+    0.4761904761904762
+   ],
+   "out95": [
+    39.0,
+    40.0
+   ]
+  },
+  {
+   "plant": "campus@150",
+   "split": "unseen",
+   "s": [
+    2.3523131672597866,
+    0.25622775800711745,
+    0.0
+   ],
+   "exposed": [
+    13.523131672597867,
+    4.98220640569395,
+    0.0
+   ],
+   "out95": [
+    56.0,
+    41.0
+   ]
+  },
+  {
+   "plant": "L@151",
+   "split": "unseen",
+   "s": null,
+   "exposed": [
+    1.5,
+    0.5,
+    null
+   ],
+   "out95": null,
+   "note": "risk-aware planner"
+  },
+  {
+   "plant": "U@151",
+   "split": "unseen",
+   "s": null,
+   "exposed": [
+    15.5,
+    1.3,
+    null
+   ],
+   "out95": null,
+   "note": "risk-aware planner"
+  },
+  {
+   "plant": "T@151",
+   "split": "unseen",
+   "s": null,
+   "exposed": [
+    5.0,
+    3.0,
+    null
+   ],
+   "out95": null,
+   "note": "risk-aware planner"
+  },
+  {
+   "plant": "campus@151",
+   "split": "unseen",
+   "s": null,
+   "exposed": [
+    4.5,
+    0.3,
+    null
+   ],
+   "out95": null,
+   "note": "risk-aware planner"
+  },
+  {
+   "plant": "L@152",
+   "split": "unseen",
+   "s": null,
+   "exposed": [
+    1.1,
+    0.5,
+    null
+   ],
+   "out95": null,
+   "note": "risk-aware planner"
+  },
+  {
+   "plant": "U@152",
+   "split": "unseen",
+   "s": null,
+   "exposed": [
+    4.5,
+    0.4,
+    null
+   ],
+   "out95": null,
+   "note": "risk-aware planner"
+  }
+ ]
+}
