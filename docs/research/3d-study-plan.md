@@ -312,3 +312,19 @@ faithfully. Limit of the data, reported as such.
 
 **Tools ready for L4:** GADEN core (native) + driver; OpenFOAM 2406 image (1.9 GB) in
 Colima.
+
+### 2026-11-22, session 2 (end): L4, workflows, verdict
+
+- **L4 built and run:** OpenFOAM 2406 RANS (simpleFoam, k-epsilon) per setup in Docker,
+  150-163k cells, 20-25 min each (A, B converged; C, D plateau at residual 1e-4 / 6e-4,
+  vortex shedding). Inlet: log law fitted to the measured profile (matches U at 0.5 m; the
+  tunnel profile is not a developed log law, setup B nearly uniform below 0.6 m).
+  GADEN in the CFD wind via the native driver (< 1 s per run).
+- **GADEN in a steady wind is deterministic:** 10x filaments, 3x averaging changed nothing.
+- **Calibrated, L1 >= L2 ~ L3 > L4 > L4G** against real data and as B context.
+- **Source task:** adjoint solves (Keats et al. 2007) give every leak per detector; cloud
+  TabPFN with simulated context: 0.22 m median error (detectors 0.45 m apart).
+- **SRGDM:** locator holds under an unseen airflow for known candidates (0.02 cells).
+- **Height:** Britter & McQuaid passive-limit distances (`heights.png`).
+- **Cloud tokens for the study:** 1.56M (credits 1.44M -> 3.00M), under the 2M agreed.
+- Report with the verdict: `docs/research/3d-two-workflows.md`.

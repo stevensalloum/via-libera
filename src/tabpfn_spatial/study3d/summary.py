@@ -79,7 +79,7 @@ def main() -> int:
     print("## Physics ladder\n\n" + ladder_table())
     names = [
         "transfer_cloud_L3_kcal",
-        "transfer_cloud_L4G_kcal",
+        "transfer_cloud_L1_kcal",
         "transfer_baseline_L3_k1",
         "transfer_uci_cloud_L3",
         "transfer_orebro_cloud_L3",

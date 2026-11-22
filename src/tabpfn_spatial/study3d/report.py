@@ -47,8 +47,8 @@ def fig_ladder(out: Path) -> Path:
     metrics = [("auc_hot", "AUC: finds the real hottest 10 %"),
                ("profile_r", "vertical profile r (downwind)"),
                ("width_ratio", "crosswind spread, model / real")]  # fmt: skip
-    levels = ["L1", "L2", "L3", "L4"]
-    fig, axes = plt.subplots(1, 3, figsize=(13, 5.2), sharey=True)
+    levels = ["L1", "L2", "L3", "L4", "L4G"]
+    fig, axes = plt.subplots(1, 3, figsize=(13, 6.0), sharey=True)
     labels = [f"{d} {lv}" for d, _, _ in sets for lv in levels]
     for ax, (m, title) in zip(axes, metrics, strict=True):
         variants = [
@@ -136,8 +136,8 @@ def fig_transfer_hazard(out: Path, run: str = "transfer_cloud_L3_kcal") -> Path:
 def fig_source(out: Path, run: str) -> Path:
     """Source task: horizontal error per workflow (m, 1:50 model scale)."""
     rows = _load(run)
-    order = ["real->real", "A real->sim", "B same-site", "B other-sites", "physics inversion",
-             "strongest detector"]  # fmt: skip
+    order = ["real->real", "real->real new position", "A real->sim", "B same-site",
+             "B other-sites", "physics inversion", "strongest detector"]  # fmt: skip
     fig, ax = plt.subplots(figsize=(9, 4.2))
     for y, w in enumerate(order):
         v = np.array([r["error_m"] for r in rows if r["workflow"] == w])
@@ -145,7 +145,7 @@ def fig_source(out: Path, run: str) -> Path:
             continue
         color = (
             PALETTE[0]
-            if w == "real->real"
+            if w.startswith("real")
             else (PALETTE[1] if w.startswith("A") else (PALETTE[2] if w.startswith("B") else MUTED))
         )
         ax.scatter(v, np.full(v.size, y), s=18, color=color, alpha=0.45, lw=0)
@@ -200,6 +200,41 @@ def fig_profiles(out: Path) -> Path:
     return out
 
 
+def fig_verdict(out: Path) -> Path:
+    """Where does each workflow work? Mean AUC of the hot 10 %, dataset x workflow (cloud)."""
+    runs = [("Red:Vapor\n(1:50 site, 4 setups)", "transfer_cloud_L3_kcal"),
+            ("UCI\n(empty tunnel)", "transfer_uci_cloud_L3"),
+            ("Örebro\n(office, HVAC)", "transfer_orebro_cloud_L3")]  # fmt: skip
+    flows = ["real->real", "hybrid", "A real->sim", "B other-sites", "B same-site", "physics"]
+    vals = np.full((len(runs), len(flows)), np.nan)
+    for i, (_, name) in enumerate(runs):
+        rows = _load(name)
+        for j, w in enumerate(flows):
+            v = [r["auc_hot"] for r in rows if r["workflow"] == w]
+            if v:
+                vals[i, j] = np.mean(v)
+    fig, ax = plt.subplots(figsize=(10, 3.6))
+    im = ax.imshow(vals, cmap="Blues", vmin=0.5, vmax=1.0, aspect="auto")
+    for i in range(vals.shape[0]):
+        for j in range(vals.shape[1]):
+            ax.text(j, i, f"{vals[i, j]:.2f}", ha="center", va="center", fontsize=9,
+                    color="white" if vals[i, j] > 0.8 else INK)  # fmt: skip
+    ax.set_xticks(range(len(flows)), ["real -> real", "hybrid", "A: real -> sim",
+                                      "B: sim other\nsites -> real", "B: sim target\nsite -> real",
+                                      "physics\nalone"], fontsize=8)  # fmt: skip
+    ax.set_yticks(range(len(runs)), [r[0] for r in runs], fontsize=8)
+    cb = fig.colorbar(im, ax=ax, shrink=0.85)
+    cb.set_label("AUC: finds the real hottest 10 % (0.5 = chance)", color=INK)
+    ax.set_title("Hazard task: where each workflow works (cloud TabPFN, held-out sites; A: truth "
+                 "= simulator)", fontsize=10, color=INK, loc="left")  # fmt: skip
+    _style(ax)
+    ax.grid(False)
+    fig.tight_layout()
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    return out
+
+
 def main() -> int:
     """Write every figure whose results exist."""
     FIG.mkdir(parents=True, exist_ok=True)
@@ -208,9 +243,11 @@ def main() -> int:
         print(fig_profiles(FIG / "profiles.png"))
     if _load("transfer_cloud_L3_kcal"):
         print(fig_transfer_hazard(FIG / "transfer_hazard.png"))
+    if _load("transfer_orebro_cloud_L3"):
+        print(fig_verdict(FIG / "verdict.png"))
     for b in ("cloud", "baseline"):
         if _load(f"source_redvapor_{b}"):
-            print(fig_source(FIG / f"transfer_source_{b}.png", f"source_redvapor_{b}"))
+            print(fig_source(FIG / "transfer_source.png", f"source_redvapor_{b}"))
             break
     return 0
 
