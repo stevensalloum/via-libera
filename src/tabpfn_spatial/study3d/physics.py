@@ -213,8 +213,23 @@ def divergence(g: Grid, solid: np.ndarray, flow: Flow, w: Faces) -> np.ndarray:
 
 
 def transport(g: Grid, solid: np.ndarray, flow: Flow, wind: Faces, src: np.ndarray,
-              rate: float = 1.0) -> np.ndarray:  # fmt: skip
-    """Steady concentration (nx, ny, nz) of a release ``rate`` (units/s) at ``src``.
+              rate: float = 1.0, k_field: np.ndarray | None = None) -> np.ndarray:  # fmt: skip
+    """Steady concentration (nx, ny, nz) of a release ``rate`` (units/s) at ``src``."""
+    mat, ids = transport_matrix(g, solid, flow, wind, k_field)
+    rhs = np.zeros(mat.shape[0])
+    rhs[ids[source_cell(g, solid, src)]] = rate  # units/s into the cell; unknowns units/m^3
+    out = np.zeros(g.shape)
+    out[~solid] = _solve(mat.tocsc(), rhs)
+    return out
+
+
+def transport_matrix(
+    g: Grid, solid: np.ndarray, flow: Flow, wind: Faces, k_field: np.ndarray | None = None
+) -> tuple[sparse.csr_matrix, np.ndarray]:
+    """The steady transport operator A (A c = sources) and the fluid-cell numbering.
+
+    ``k_field`` (nx, ny, nz), if given, replaces the flow's K(z): each face takes the mean
+    of its two cells (L4: K = nu_t / Sc_t from the CFD).
 
     Finite volumes: first-order upwind advection, central diffusion with K(z) at the face,
     no flux through walls and buildings, outflow carries gas out of open boundaries, inflow
@@ -235,7 +250,14 @@ def transport(g: Grid, solid: np.ndarray, flow: Flow, wind: Faces, src: np.ndarr
     for axis, f, a, b in _face_pairs(g, solid, flow):
         u = (wind.ux, wind.uy, wind.uz)[axis][f]
         zf = g.lo[2] + h * f[2] if axis == 2 else zc[f[2]]
-        k = flow.diffusivity(zf, horizontal=axis < 2)
+        if k_field is None:
+            k = flow.diffusivity(zf, horizontal=axis < 2)
+        else:
+            kc = np.pad(k_field, [(1, 1) if ax == axis else (0, 0) for ax in range(3)], mode="edge")
+            lo = [slice(None)] * 3
+            hi = [slice(None)] * 3
+            lo[axis], hi[axis] = slice(0, -1), slice(1, None)
+            k = 0.5 * (kc[tuple(lo)] + kc[tuple(hi)])[f]
         dcoef = k * area / h
         up, dn = np.maximum(u, 0) * area, np.minimum(u, 0) * area
         both = (a >= 0) & (b >= 0)
@@ -254,12 +276,28 @@ def transport(g: Grid, solid: np.ndarray, flow: Flow, wind: Faces, src: np.ndarr
                             shape=(n, n))  # fmt: skip
     ids = np.full(g.shape, -1)
     ids[~solid] = np.arange(n)
-    i = source_cell(g, solid, src)
-    rhs = np.zeros(n)
-    rhs[ids[i]] = rate  # units/s into the source cell; unknowns are units/m^3
-    c = _solve(mat.tocsc(), rhs)
-    out = np.zeros(g.shape)
-    out[~solid] = c
+    return mat, ids
+
+
+def adjoint(g: Grid, solid: np.ndarray, flow: Flow, wind: Faces,
+            sensors: np.ndarray) -> np.ndarray:  # fmt: skip
+    """Source-receptor sensitivity (Keats, Yee & Lien 2007): (n_sensors, nx, ny, nz).
+
+    Entry [s, cell] is the steady reading at sensor s for a unit release in that cell
+    (0 in solids). One factorisation of A^T and one back-substitution per sensor give the
+    readings of every possible leak at once, instead of one forward solve per leak.
+    """
+    mat, ids = transport_matrix(g, solid, flow, wind)
+    lu = linalg.splu(mat.T.tocsc())
+    cells = g.index(sensors)
+    out = np.zeros((len(sensors), *g.shape))
+    for k, (i, j, m) in enumerate(cells):
+        if ids[i, j, m] < 0:
+            out[k] = np.nan  # sensor inside a building
+            continue
+        e = np.zeros(mat.shape[0])
+        e[ids[i, j, m]] = 1.0
+        out[k][~solid] = lu.solve(e)
     return out
 
 

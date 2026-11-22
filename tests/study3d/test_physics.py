@@ -60,3 +60,18 @@ def test_source_on_top_of_a_tank_goes_to_the_air_above() -> None:
     solid = np.zeros(g.shape, bool)
     solid[4:6, 4:6, :2] = True  # tank 0.2 m tall
     assert ph.source_cell(g, solid, np.array([0.45, 0.45, 0.15])) == (4, 4, 2)
+
+
+def test_adjoint_matches_forward_solves() -> None:
+    g = Grid.box((0.0, 0.0, 0.0), (1.0, 0.5, 0.3), 0.05)
+    solid = np.zeros(g.shape, bool)
+    solid[8:10, 4:6, :3] = True
+    f = _flow()
+    w = ph.mass_consistent(g, solid, f, ph.base_wind(g, solid, f))
+    sensors = np.array([[0.8, 0.25, 0.1], [0.6, 0.1, 0.2]])
+    adj = ph.adjoint(g, solid, f, w, sensors)
+    for leak in ([0.12, 0.27, 0.07], [0.3, 0.12, 0.17]):
+        fwd = ph.transport(g, solid, f, w, np.array(leak))
+        i = g.index(np.array([leak]))[0]
+        for k, s in enumerate(sensors):
+            assert adj[k][tuple(i)] == pytest.approx(ph.sample(g, fwd, s[None])[0], rel=1e-6)

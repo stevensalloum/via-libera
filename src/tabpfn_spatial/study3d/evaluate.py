@@ -27,8 +27,14 @@ def _downwind(xyz: np.ndarray, src: np.ndarray, direction: tuple[float, float],
 
 def vertical_profile(xyz: np.ndarray, c: np.ndarray, src: np.ndarray,
                      direction: tuple[float, float]) -> tuple[np.ndarray, np.ndarray]:  # fmt: skip
-    """Heights and mean concentration per height downwind, normalised to a peak of 1."""
+    """Heights and mean concentration per height downwind, normalised to a peak of 1.
+
+    Falls back to all points when the downwind region holds fewer than 3 heights (a room
+    with no mean wind, a tunnel with sensors at one height).
+    """
     m, _ = _downwind(xyz, src, direction)
+    if np.unique(np.round(xyz[m, 2], 3)).size < 3:
+        m = np.ones(len(xyz), bool)
     z = np.round(xyz[m, 2], 3)
     zs = np.unique(z)
     p = np.array([np.nanmean(np.clip(c[m][z == v], 0, None)) for v in zs])
@@ -43,6 +49,8 @@ def crosswind_spread(xyz: np.ndarray, c: np.ndarray, src: np.ndarray,
     noise floor spread over the whole domain does not count as plume.
     """
     m, n = _downwind(xyz, src, direction, half_width=np.inf)
+    if m.sum() < 3:  # no downwind region (room without mean wind): use every point
+        m = np.ones(len(xyz), bool)
     w = np.clip(c[m] - 0.05 * np.nanmax(c[m]), 0, None)
     if w.sum() <= 0:
         return np.nan
@@ -59,7 +67,7 @@ def score(xyz: np.ndarray, real: np.ndarray, model: np.ndarray, src: np.ndarray,
     return {
         "rho": float(spearmanr(model, real).statistic),
         "auc_hot": float(roc_auc_score(hot, model)),
-        "profile_r": float(np.corrcoef(pr, pm)[0, 1]),
+        "profile_r": float(np.corrcoef(pr, pm)[0, 1]) if pr.size >= 3 else float("nan"),
         "width_ratio": crosswind_spread(xyz, model, src, direction)
         / crosswind_spread(xyz, real, src, direction),
     }
