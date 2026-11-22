@@ -11,10 +11,13 @@ import { animateDetails } from "./details.js";
 import { CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer.js";
 import { Navigator } from "./controls.js";
 import { animateMachines } from "./machines.js";
-import { Replay, loadReplay, replayPanel } from "./replay.js";
+import { Replay, loadReplay, recordVideo, replayPanel } from "./replay.js";
 import { buildWorld } from "./world.js";
 
-const scene = await (await fetch("data/scene.json")).json();
+// ?run=<folder> shows one run of the served folder (e.g. outputs/world/replay-T-...)
+const RUN = new URLSearchParams(location.search).get("run");
+const DATA = RUN ? `data/${encodeURIComponent(RUN)}/` : "data/";
+const scene = await (await fetch(`${DATA}scene.json`)).json();
 const app = document.getElementById("app");
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -162,7 +165,7 @@ addEventListener("keydown", (e) => {
 });
 
 // ------------------------------------------------------------------------ replay --
-const rep = await loadReplay();
+const rep = await loadReplay(DATA);
 let replay = null, refreshReplay = null;
 if (rep) {
   replay = new Replay(rep, world3d, F, parts);
@@ -235,7 +238,8 @@ renderer.setAnimationLoop(() => {
   const dt = Math.min(since, 0.1);
   since = 0;
   frame++;
-  nav.update(dt);
+  if (replay && replay.cinematic) cinematic(clock.elapsedTime);
+  else nav.update(dt);
   animateMachines(parts.machines, clock.elapsedTime);
   if (!replay) parts.agvs.drive(clock.elapsedTime);
   animateDetails(parts.overhead, clock.elapsedTime);
@@ -245,5 +249,22 @@ renderer.setAnimationLoop(() => {
   labelRenderer.render(world3d, camera);
   drawMinimap();
 });
+// Cinematic camera for videos: a slow orbit, aimed between the plant centre and the leak.
+function cinematic(t) {
+  const leak = replay.rep.leak.xy, cx = (scene.width / 2 + leak[0]) / 2, cy = (scene.height / 2 + leak[1]) / 2;
+  const a = -2.3 + t * 0.05, r = span * 0.62, h = span * 0.38;
+  camera.position.copy(F.P(cx + r * Math.cos(a), cy + r * Math.sin(a), h));
+  camera.lookAt(F.P(cx, cy, 0));
+  nav.orbit.target.copy(F.P(cx, cy, 0));
+}
+
+// Scripted recording (used to make the milestone videos): plays from the start and saves.
+window.__record = async ({ name, planner = "ccrp", speed = 3, cine = true } = {}) => {
+  if (!replay) return null;
+  replay.planner = planner;
+  replay.speed = speed;
+  replay.cinematic = cine;
+  return recordVideo(replay, null, name);
+};
 window.__world = { scene, nav, camera, parts, replay };  // for debugging in the console
 $("loading").remove();

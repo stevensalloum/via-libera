@@ -12,9 +12,9 @@ function b64(s) {
   return out;
 }
 
-export async function loadReplay() {
+export async function loadReplay(base = "data/") {
   try {
-    const r = await fetch("data/replay.json");
+    const r = await fetch(`${base}replay.json`);
     return r.ok ? await r.json() : null;
   } catch {
     return null;
@@ -178,13 +178,15 @@ export class Replay {
     const k0 = this.frameIndex(t), k1 = this.frameIndex(t + 1), a = t - Math.floor(t);
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
     const hidden = new THREE.Matrix4().makeScale(0, 0, 0);
+    const size = this.cinematic ? 2.2 : 1;  // seen from far away in videos: drawn larger
+    const scale = new THREE.Vector3(size, size, size);
     for (let i = 0; i < this.n; i++) {
       const st = track.state[k0 * this.n + i];
       if (st === 3) { this.bodies.setMatrixAt(i, hidden); this.heads.setMatrixAt(i, hidden); continue; }
       const [x0, y0] = this.personXY(track, k0, i), [x1, y1] = this.personXY(track, k1, i);
       const x = x0 + (x1 - x0) * a, y = y0 + (y1 - y0) * a;
       if (Math.hypot(x1 - x0, y1 - y0) > 0.05) q.setFromAxisAngle(up, Math.atan2(x1 - x0, -(y1 - y0)) + Math.PI);
-      m.compose(this.F.P(x, y, 0), q, new THREE.Vector3(1, 1, 1));
+      m.compose(this.F.P(x, y, 0), q, scale);
       this.bodies.setMatrixAt(i, m);
       this.heads.setMatrixAt(i, m);
       this.bodies.setColorAt(i, this.colours[st]);
@@ -238,6 +240,44 @@ export class Replay {
   }
 }
 
+const PLAN_COLOURS = { nearest: "#2a78d6", risk: "#eb6834", ccrp: "#1baf7a" };
+
+// Per planner and second: % of people out, people standing in harmful gas (state 3 / 2).
+function planCurves(replay) {
+  const out = {}, n = replay.n;
+  for (const [p, tr] of Object.entries(replay.tracks)) {
+    const T = Math.floor(tr.state.length / n), o = new Float32Array(T), g = new Float32Array(T);
+    for (let k = 0; k < T; k++) {
+      let a = 0, b = 0;
+      for (let i = 0; i < n; i++) { const st = tr.state[k * n + i]; if (st === 3) a++; else if (st === 2) b++; }
+      o[k] = (100 * a) / n; g[k] = b;
+    }
+    out[p] = { out: o, gas: g };
+  }
+  return out;
+}
+
+function drawCurves(cv, curves, key, title, t, tEnd, yMax) {
+  const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, L = 34, B = 18, T0 = 16;
+  ctx.clearRect(0, 0, W, H);
+  const top = yMax ?? Math.max(1, ...Object.values(curves).map((c) => Math.max(...c[key])));
+  ctx.fillStyle = "#c9d1d9"; ctx.font = "11px system-ui"; ctx.fillText(title, L, 11);
+  ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 1;
+  for (const f of [0, 0.5, 1]) {
+    const y = T0 + (1 - f) * (H - T0 - B);
+    ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(W - 4, y); ctx.stroke();
+    ctx.fillStyle = "#8b949e"; ctx.fillText(String(Math.round(f * top)), 4, y + 4);
+  }
+  ctx.fillText("0 s", L, H - 4); ctx.fillText(`${Math.round(tEnd)} s`, W - 40, H - 4);
+  const X = (k) => L + (k / tEnd) * (W - 4 - L), Y = (v) => T0 + (1 - v / top) * (H - T0 - B);
+  for (const [p, c] of Object.entries(curves)) {
+    ctx.strokeStyle = PLAN_COLOURS[p] || "#ccc"; ctx.lineWidth = 2; ctx.beginPath();
+    c[key].forEach((v, k) => (k ? ctx.lineTo(X(k), Y(v)) : ctx.moveTo(X(k), Y(v))));
+    ctx.stroke();
+  }
+  ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(X(t), T0); ctx.lineTo(X(t), H - B); ctx.stroke();
+}
+
 // Timeline panel wired to a Replay.
 export function replayPanel(replay) {
   const rep = replay.rep;
@@ -253,11 +293,14 @@ export function replayPanel(replay) {
       <label><input type="checkbox" id="r-gas" checked> true gas</label>
       <label><input type="checkbox" id="r-danger"> predicted danger</label>
       <label><input type="checkbox" id="r-source" checked> leak guesses</label>
+      <label title="slow orbit around the plant, for videos"><input type="checkbox" id="r-cine"> cinematic camera</label>
       <button id="r-record" title="Plays from the start and saves the 3D view as a video file">&#9679; Record video</button>
     </div>
     <div class="rtrack"><input type="range" id="r-time" min="0" max="${rep.t_end}" step="0.1" value="0">
       <div class="ticks">${updates}${rep.t_alarm !== null ? `<b style="left:${(100 * rep.t_alarm) / rep.t_end}%"></b>` : ""}</div></div>
-    <div id="r-text"></div>`;
+    <div id="r-text"></div>
+    <div class="rcharts"><canvas id="r-out" width="420" height="110"></canvas><canvas id="r-ingas" width="420" height="110"></canvas>
+      <div id="r-legend"></div></div>`;
   document.body.appendChild(el);
   const $ = (id) => document.getElementById(id);
   $("r-play").onclick = () => {
@@ -273,7 +316,12 @@ export function replayPanel(replay) {
   replay.showSource = true;
   $("r-source").onchange = (e) => { replay.showSource = e.target.checked; replay.lastUpdate = -2; };
   $("r-record").onclick = () => recordVideo(replay, $("r-record"));
+  $("r-cine").onchange = (e) => { replay.cinematic = e.target.checked; };
+  const curves = planCurves(replay);
+  $("r-legend").innerHTML = Object.keys(curves).map((p) => `<span style="color:${PLAN_COLOURS[p] || "#ccc"}">&#9644; ${p}</span>`).join(" ");
   return () => {
+    drawCurves($("r-out"), curves, "out", "% of people out", replay.t, rep.t_end, 100);
+    drawCurves($("r-ingas"), curves, "gas", "people in harmful gas now", replay.t, rep.t_end, null);
     $("r-play").innerHTML = replay.playing ? "&#10074;&#10074; Pause" : "&#9654; Play";
     $("r-time").value = replay.t;
     const s = replay.stats(), m = rep.planners[replay.planner].metrics;
@@ -292,32 +340,44 @@ export function replayPanel(replay) {
   };
 }
 
-// Record the 3D canvas while the replay plays from the start; download a WebM at the end.
-// (Labels are HTML on top of the canvas and are not in the video.)
-function recordVideo(replay, button) {
+// Record the 3D canvas while the replay plays from the start. Served by `uv run world`, the
+// video is saved into the run's folder (videos/); otherwise it downloads as a WebM.
+// (Labels are HTML on top of the canvas and are not in the video.) Returns a promise.
+export function recordVideo(replay, button, name) {
   const canvas = document.querySelector("#app canvas");
   if (!canvas.captureStream || typeof MediaRecorder === "undefined") {
     alert("This browser cannot record the canvas; use screen recording (Cmd+Shift+5).");
-    return;
+    return Promise.resolve(null);
   }
   const type = ["video/webm;codecs=vp9", "video/webm"].find((t) => MediaRecorder.isTypeSupported(t));
   const rec = new MediaRecorder(canvas.captureStream(30), { mimeType: type, videoBitsPerSecond: 8e6 });
   const chunks = [];
+  const file = name || `replay-${replay.rep.seed}-${replay.planner}.webm`;
   rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-  rec.onstop = () => {
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob(chunks, { type: "video/webm" }));
-    a.download = `factory-replay-${replay.rep.seed}-${replay.planner}.webm`;
-    a.click();
-    button.disabled = false;
-    button.innerHTML = "&#9679; Record video";
-  };
+  const done = new Promise((resolve) => {
+    rec.onstop = async () => {
+      const blob = new Blob(chunks, { type: "video/webm" });
+      let saved = null;
+      try {
+        const r = await fetch(`save/${encodeURIComponent(file)}${location.search}`, { method: "POST", body: blob });
+        if (r.ok) saved = (await r.json()).path;
+      } catch { /* not served by uv run world */ }
+      if (!saved) {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = file;
+        a.click();
+      }
+      if (button) { button.disabled = false; button.innerHTML = saved ? "&#10003; Saved" : "&#9679; Record video"; }
+      resolve(saved || file);
+    };
+  });
   replay.t = 0;
   replay.playing = true;
-  button.disabled = true;
-  button.textContent = "Recording...";
+  if (button) { button.disabled = true; button.textContent = "Recording..."; }
   rec.start(1000);
   const check = setInterval(() => {
     if (!replay.playing) { clearInterval(check); rec.stop(); }
   }, 250);
+  return done;
 }
