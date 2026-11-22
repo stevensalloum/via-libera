@@ -135,3 +135,55 @@ wall downwind; the figure now shows the drop at (19, 21) m with 19 m of open flo
 **Limits.** One plant (a 7-plant version, `source.height_plants3d`, is written but not run:
 time). 1 m voxels cap the accuracy at 0.17 m. Heights are from simulation only; real check:
 Örebro3DSEN (sources at several heights, 27 sensors on 3 levels).
+
+## 2026-11-22 · The whole project in 3D on unseen plants (evac-final)
+
+**What changed and why.** Steven wired the team's 3D models into one loop (#54, #55):
+`TabPFNLocator3D` (where + leak size, trained on 3D readings of all detectors) and my
+`HeightLocator` (leak height), Ahmad's 3D hazard model, and the crowd planners. Per plant the
+models are fitted on 3D simulations of *that* plant (a new site has no real leaks: simulate,
+fit, deploy), then a leak runs through the loop: 3D gas, sensor alarm, model updates, four
+evacuation policies on the same people, against perfect models (true future gas).
+
+**Figures** (`uv run evac-final --backend cloud --figures` redraws them from the saved log):
+
+![Source, height and hazard skill on unseen plants](../figures/rayan/final-1-models-unseen.png)
+![Seconds in harmful gas per person, per policy](../figures/rayan/final-2-policies-unseen.png)
+
+```bash
+uv run evac-final --backend cloud --leaks 1 --n-train 100 --workers 3 --only "L@151" "U@151" "T@151" "campus@151" "L@152" "U@152" "T@152" "campus@152"
+```
+
+**Numbers.** 6 unseen plants (L, U, T, campus at seeds 151-152; T@152 and campus@152 not
+run: stopped for the stress run), 1 methane leak each, 100 training leaks per model, cloud.
+
+| Plant | Leak error at alarm / median over updates | Height error | Hazard Brier / recall | % exposed: nearest exit -> risk-aware |
+|---|---|---|---|---|
+| L@151 | 0.1 / 0.64 m | 0.64 m | 0.07 / 0.40 | 1.5 -> 0.5 |
+| U@151 | 0.24 / 0.26 m | 0.26 m | 0.03 / 0.00 | 15.5 -> 1.3 |
+| T@151 | 0.0 / 0.5 m | 0.5 m | 0.07 / 0.44 | 5.0 -> 3.0 |
+| campus@151 | 0.6 / 4.0 m | 0.6 m | 0.14 / 0.02 | 4.5 -> 0.3 |
+| L@152 | 1.1 / 1.1 m | 1.1 m | 0.07 / 0.36 | 1.1 -> 0.5 |
+| U@152 | 0.1 / 0.1 m | 0.1 m | 0.05 / 0.05 | 4.5 -> 0.4 |
+
+Means over the 6 plants: seconds in gas per person 0.49 (nearest exit) -> **0.04** (risk-aware,
+CCRP) with the team's models, 0.06 with perfect models; exposed 5.3 % -> **1.0 %** (perfect
+1.1-1.2 %). Median leak error 0.6 m (0.2 m at the alarm), height 0.55 m, alarm at 5 s.
+
+- The source part transfers to plants it never saw: in 5 of 6 the floor position is exact and
+  the whole error is the height (0.1-1.1 m). Only campus@151 drifts to 4 m after the alarm.
+- With these models the planners do as well as with the true future gas.
+- Hazard recall at P >= 0.5 is low (0-44 %, median 0.20): the hazard map misses much of the
+  harmful area; the planners still avoid it because the gas is near the found leak.
+
+**Stress run (partial, still running).** `uv run evac-final --backend cloud --stress --leaks 1
+--unseen 1 --n-train 100 --workers 3` (Steven, #56: low leaks near people, 2x rate, updates every
+5 s, hazard rows near the plume). First results:
+
+- default plant: leak and height error 0.0 m; seconds in gas 0.99 (nearest) -> 0.47
+  (risk-aware), perfect models 0.83; exposed 10.7 % -> 9.7 %; hazard Brier 0.50, recall 0.27.
+- L-plant: **failed** in the hazard part, `ValueError: hazard probabilities must be between
+  zero and one` (`hazard/volume3d.py:209`); the study skips it and goes on.
+
+**Limits.** 1 leak per plant, methane only, 100 training leaks per model (fast, not the 600 of
+the height study). The stress results will be added when the run finishes.
