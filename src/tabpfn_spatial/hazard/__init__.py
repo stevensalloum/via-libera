@@ -7,5 +7,10 @@ Goal: a TabPFN predictor with calibrated probabilities that beats it (see docs/b
 
 from tabpfn_spatial.hazard.baseline import ForwardSimPredictor, brier, hazard_from_fields
 from tabpfn_spatial.hazard.tabpfn_predictor import TabPFNHazardPredictor
+from tabpfn_spatial.hazard.volume3d import HazardVolume, MachineBox3D, VolumeGrid
+from tabpfn_spatial.hazard.volume3d_predictor import ForwardVolumePredictor, TabPFNVolumePredictor
 
-__all__ = ["ForwardSimPredictor", "TabPFNHazardPredictor", "brier", "hazard_from_fields"]
+__all__ = [
+    "ForwardSimPredictor", "ForwardVolumePredictor", "HazardVolume", "MachineBox3D",
+    "TabPFNHazardPredictor", "TabPFNVolumePredictor", "VolumeGrid", "brier", "hazard_from_fields",
+]  # fmt: skip

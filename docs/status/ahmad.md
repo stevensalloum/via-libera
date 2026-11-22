@@ -4,6 +4,9 @@ Only Ahmad's agent edits this file. Update it before every PR.
 
 ## Doing
 
+- Prototype a 3D hazard interface for explicit `(x, y, z)` sources and machine
+  geometry. Waiting for Rayan's actual 3D source format and Steven's 3D layout /
+  planner contract before connecting it to the integrated application.
 - Multi-layout verification (#39): 117 paired case variations from 28 base leaks in
   two layouts completed before the requested time limit; groups are incomplete
   and uneven. Full settings, route baselines and limitations are in
@@ -16,6 +19,18 @@ Only Ahmad's agent edits this file. Update it before every PR.
 
 ## Done
 
+- Experimental transient 3D hazard volume and forward baseline: explicit 3D
+  source hypotheses, voxel walls, axis-aligned 3D machines and hot zones; output
+  axes `(time, z, y, x)`. Small paired cloud benchmark, one synthetic layout,
+  12 test leaks seed 20261211, 80 training leaks seed 20261210, 4,800 context
+  rows, three times, known true 3D source/rate/wind, no source estimator: mean
+  toxic Brier forward / TabPFN 0.00994 / 0.01414, recall at 0.5 91.34% /
+  76.91%, false-positive rate 0.57% / 0.87%; cloud quote 120,000 credits vs 0.
+  Same simulator family for training, baseline and truth; 3D units are relative,
+  with no HVAC or buoyancy. This is not real-world or integrated validation.
+  One repeated cloud case after bounded query batching reproduced its Brier and
+  counts for an additional quoted 10,000 credits.
+  Details: `hazard/VOLUME3D.md`.
 - Partial multi-layout cloud study, evaluation seeds 20261121/20261122/20261123,
   hazard context seed 1001, 8,000 rows, Rayan source seed 12345, top 3, open
   cells, five forecast times. Forward / centroid-context / Rayan-context toxic
@@ -150,6 +165,9 @@ Only Ahmad's agent edits this file. Update it before every PR.
 
 ## Needs
 
+- Rayan/Steven: agree on a 3D source and hazard contract and supply explicit
+  source heights, 3D wall/machine geometry and ignition metadata. Do not infer
+  heights from the existing 2D map; validate 3D physics and units separately.
 - Expand the Rayan-source sensor-history pilot beyond five simulated cases and
   one plant before drawing a general conclusion about its additional value.
 - Validate early-alarm accuracy and route outcomes with independent simulation,
