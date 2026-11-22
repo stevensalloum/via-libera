@@ -44,3 +44,32 @@ def test_orebro_log_loads() -> None:
     assert run.t[1] - run.t[0] == pytest.approx(0.5)  # 2 Hz
     assert run.source == (2.70, 0.10, 2.20)
     assert run.wind_speed.max() < 5 and run.wind_dir.max() > 5  # m/s vs degrees
+
+
+def test_uci_names_parse() -> None:
+    from tabpfn_spatial.realdata import uci
+
+    m = uci.parse_name("WTD_upload/Benzene_200/L3/201105121600_board_setPoint_400V_fan_setPoint_"
+                       "100_mfc_setPoint_Benzene_200ppm_p5")  # fmt: skip
+    assert m is not None and (m.gas, m.ppm, m.line, m.heater, m.fan) == (
+        "Benzene",
+        200,
+        3,
+        400,
+        "100",
+    )
+    assert uci.parse_name("WTD_upload/") is None
+    assert len(uci.SENSOR_COLS) == 72 and uci.SENSOR_COLS[0] == 12 and uci.SENSOR_COLS[8] == 21
+
+
+SRGDM = Path("data/real/srgdm")
+
+
+@pytest.mark.skipif(not (SRGDM / "30x25/valid.file").exists(), reason="SRGDM not downloaded")
+def test_srgdm_sources_match_hottest_cell() -> None:
+    from tabpfn_spatial.realdata import srgdm
+
+    s = srgdm.load_tensor(SRGDM / "30x25/valid.file")
+    assert s.shape == (120, 180, 30, 25)
+    hot = [np.unravel_index(s[i].mean(0).argmax(), (30, 25)) for i in range(120)]
+    assert all(tuple(map(int, h)) == srgdm.source_cell(i) for i, h in enumerate(hot))
