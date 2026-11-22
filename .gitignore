@@ -56,3 +56,7 @@ milestones/
 
 # demo videos recorded from the viewer
 /demo/*/videos/
+
+# the presentation videos (the website needs them; everything else stays ignored)
+!demo/media/*.mp4
+/site/

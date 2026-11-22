@@ -235,8 +235,29 @@ def demo() -> int:
     if args and args[0] == "--list":
         print("\n".join(d.name for d in runs))
         return 0
+    if args and args[0] == "--export":  # a static copy for any web host (GitHub Pages, ...)
+        out = Path(args[1] if len(args) > 1 else "site")
+        return export_site(runs[-1], out)
     pick = next((d for d in runs if args and d.name == args[0]), runs[-1])
     extra = [a for a in args if a != pick.name]
     sys.argv = ["world", "--keep", "--out", str(pick), *extra]
     print(f"Via Libera demo: {pick.name}")
     return main()
+
+
+def export_site(run: Path, out: Path) -> int:
+    """Copy the website, one saved run, the figures and the videos into ``out`` (static)."""
+    import shutil
+
+    if out.exists():
+        shutil.rmtree(out)
+    shutil.copytree(WEB, out)
+    shutil.copytree(run, out / "data", ignore=shutil.ignore_patterns("videos"))
+    shutil.copytree(FIGURES, out / "figures")
+    if (DEMO / "media").exists():
+        shutil.copytree(DEMO / "media", out / "media")
+    (out / ".nojekyll").write_text("")  # GitHub Pages: serve the folders as they are
+    size = sum(f.stat().st_size for f in out.rglob("*") if f.is_file()) / 1e6
+    print(f"static site in {out} ({size:.0f} MB): open it with any web server, e.g.")
+    print(f"  python -m http.server -d {out} 8000")
+    return 0

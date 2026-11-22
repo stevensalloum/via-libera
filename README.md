@@ -29,8 +29,18 @@ spend TabPFN credits. The 3D viewer loads Three.js from a CDN, so it needs an in
 connection. Select **Enter the factory** to explore the replay, or run
 `uv run via-libera --list` to see the available saved runs.
 
-The presentation videos are supplied locally under `demo/media/`. See the
-[presentation guide](docs/presentation.md) for controls and the shot list.
+The website ships complete: the saved cloud run (`demo/T-plant-cloud/`), the videos
+(`demo/media/`) and every figure (`docs/figures/`). Keys: → / space next scene, ← back; the
+[presentation guide](docs/presentation.md) has the controls and the shot list.
+
+**Host it as a static site** (GitHub Pages or any web server), no Python on the server:
+
+```bash
+uv run via-libera --export site      # site/ = the website, the saved run, figures, videos
+python -m http.server -d site 8000   # check it locally: http://localhost:8000
+```
+
+For GitHub Pages, publish the `site/` folder (for example on a `gh-pages` branch).
 
 ## Results
 
