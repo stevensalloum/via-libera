@@ -4,11 +4,25 @@ Only Rayan's agent edits this file. Update it before every PR.
 
 ## Doing
 
-- Leak height (3D): study PR open (this branch). Next: height inside `TabPFNLocator`
-  (live mode, prior before the alarm, joined with the floor classifier) on the stand-in,
-  then switch to Steven's simulator with heights and rerun the same study.
+- Leak height (3D): PR #50 (stand-in study + the same study on Steven's 3D simulator +
+  `HeightLocator`). Next: the real-data check on Orebro3DSEN, and the 7-plant run
+  (`source.height_plants3d`, written, not run).
 
 ## Done
+
+- **Leak height on Steven's 3D simulator** (`sim.plant3d` + `sim.gas3d`; `source.vertical3d`,
+  `source.height_study3d`). Mean height error at the alarm / + 15 s, default plant, 600
+  training and 200 test leaks, backend cloud (8 calls, ~80,000 tokens):
+
+  | Layout | Methane TabPFN | Methane k-NN | Propane TabPFN | Propane k-NN |
+  |---|---|---|---|---|
+  | Mounted only (14) | 0.74 / 0.73 m | 0.73 / 0.73 | 0.72 / 0.70 | 0.73 / 0.75 |
+  | **Masts on the pipe (32)** | **0.19 / 0.18** | 0.22 / 0.34 | **0.19 / 0.17** | 0.24 / 0.36 |
+  | **Masts 1 m beside (32)** | **0.20 / 0.21** | 0.32 / 0.46 | **0.24 / 0.26** | 0.34 / 0.49 |
+  | 3 heights everywhere (42) | 0.42 / 0.45 | 0.69 / 0.67 | 0.47 / 0.49 | 0.69 / 0.71 |
+
+  Guess: 0.76 m; best the 1 m voxels allow: 0.17 m. Model for the pipeline:
+  `source.HeightLocator` fills `SourceEstimate.height` (19 quantiles).
 
 - **Leak height on vertical pipes is learnable** (`source/vertical.py` stand-in,
   `source/height_study.py`; details and figures in `docs/journey/rayan.md`). Median height
@@ -69,10 +83,9 @@ Only Rayan's agent edits this file. Update it before every PR.
 
 ## Needs
 
-- For 3D (Steven is on it; list in the height PR): heights in `sim/` (hall, machines, pipe
-  sections and which are vertical, detector heights), a time-stepped 3D gas backend, and
-  the contract fields (detector heights in `SensorReadings`, leak height in
-  `SourceEstimate`). `source/vertical.py` is only a stand-in until then.
+- From Steven (pipeline): pass `Run3D.readings` (with `heights`) to the source part on 3D
+  plants and call `HeightLocator.attach`; see the PR #50 note. The 1 m voxels cap the
+  height accuracy at 0.17 m (finer voxels near vertical pipes would lower it).
 
 - Nothing blocking. Note for Steven: `pipeline.evaluate` / `sync-check` at t_obs 60 s can
   ask for moments beyond alarm + 30 s, which the table does not cover yet (works, but less
