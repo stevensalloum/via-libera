@@ -5,6 +5,7 @@ many leaks at once and returns concentration fields; ``readings`` gives what the
 plant's sensors measure. Everything other areas train on comes from here.
 """
 
+from tabpfn_spatial.sim.conditions import CONDITIONS, Condition
 from tabpfn_spatial.sim.factory import FITTING_WEIGHT, Factory, Machine
 from tabpfn_spatial.sim.plume import Scenario, simulate, wind_at
 from tabpfn_spatial.sim.scenarios import (
@@ -19,7 +20,9 @@ from tabpfn_spatial.sim.scenarios import (
 
 __all__ = [
     "ALARM_LEVEL",
+    "CONDITIONS",
     "FITTING_WEIGHT",
+    "Condition",
     "Factory",
     "Machine",
     "Scenario",

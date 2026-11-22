@@ -21,10 +21,15 @@ import numpy as np
 
 from tabpfn_spatial.evac.live import POLICIES, PipelineFrame, run_pipeline
 from tabpfn_spatial.evac.standins import OracleHazard, OracleLocator
-from tabpfn_spatial.sim import Factory, Scenario, sample_people, sample_scenarios
+from tabpfn_spatial.sim import CONDITIONS, Factory, Scenario, sample_people, sample_scenarios
 from tabpfn_spatial.sim.viz import draw_pipes
 
 STYLE = {"live": ("#00e676", "-"), "once": ("#ffa726", "--"), "nearest": ("#ff1744", ":")}
+LABELS = {
+    "live": "replanned at every model run (follows the newest route)",
+    "once": "planned once, on the first model run, never updated",
+    "nearest": "nearest exit, gas ignored (standard plan)",
+}
 
 
 def models_for(name: str, sc: Scenario, f: Factory, backend: str):
@@ -46,26 +51,55 @@ def models_for(name: str, sc: Scenario, f: Factory, backend: str):
     ).fit(f)
 
 
-def compute(f: Factory, seed: int, start, models: str, backend: str, max_runs: int, t_max: float,
-            log=print) -> tuple[Scenario, list[PipelineFrame]]:  # fmt: skip
-    """Run the whole emergency; print each run when its route lands."""
+def compute(
+    f: Factory,
+    seed: int,
+    start,
+    models: str,
+    backend: str,
+    max_runs: int,
+    t_max: float,
+    log=print,
+    condition: str = "standard",
+) -> tuple[Scenario, list[PipelineFrame]]:
+    """Run the whole emergency under ``condition``; print each run when its route lands."""
+    from dataclasses import replace
+
+    cond = CONDITIONS[condition]
     rng = np.random.default_rng(seed)
-    sc = sample_scenarios(f, 1, rng)[0]
+    sc = replace(sample_scenarios(f, 1, rng)[0], drift=cond.drift, seed=seed)
     start = sample_people(f, 1, rng)[0] if start is None else np.asarray(start, float)
     log(f"leak at ({sc.source[0]:.0f}, {sc.source[1]:.0f}) m, size {sc.rate:.2f}")
     log(f"person at ({start[0]:.0f}, {start[1]:.0f}) m; fitting the {models} models ({backend})")
     loc, pred = models_for(models, sc, f, backend)
     frames, seen = [], 0
-    for fr in run_pipeline(f, sc, start, loc, pred, max_runs=max_runs, t_max=t_max,
-                           rng=np.random.default_rng(seed + 1)):  # fmt: skip
+    log(
+        f"condition: {condition} (mixing {cond.diffusivity} m2/s, wind drift {cond.drift}, "
+        f"dead sensors {cond.dropout:.0%}, stuck {cond.stuck:.0%})"
+    )
+    for fr in run_pipeline(
+        f,
+        sc,
+        start,
+        loc,
+        pred,
+        max_runs=max_runs,
+        t_max=t_max,
+        rng=np.random.default_rng(seed + 1),
+        diffusivity=cond.diffusivity,
+        dropout=cond.dropout,
+        stuck=cond.stuck,
+    ):
         frames.append(fr)
         if len(fr.cycles) > seen:
             c = fr.cycles[-1]
             w = fr.walkers["live"]
             rayan = f"leak {c.source_error_m:.1f} m off, size {c.rate_est:.2f} (true {sc.rate:.2f})"
-            log(f"run {c.index + 1}: readings 0-{c.t_start:.0f} s ({c.samples} per sensor) | "
+            log(
+                f"run {c.index + 1}: readings 0-{c.t_start:.0f} s ({c.samples} per sensor) | "
                 f"Rayan {c.locate_s:.2f} s: {rayan} | Ahmad {c.predict_s:.2f} s | "
-                f"route lands at {c.t_land:.0f} s -> exit E{w.exit_index}")  # fmt: skip
+                f"route lands at {c.t_land:.0f} s -> exit E{w.exit_index}"
+            )
             seen = len(fr.cycles)
     last = frames[-1].walkers
     for p in POLICIES:
@@ -80,15 +114,28 @@ def compute(f: Factory, seed: int, start, models: str, backend: str, max_runs: i
 
 def _plant(ax, f: Factory, labels: bool = True) -> None:
     ext = (0, f.width, 0, f.height)
-    ax.imshow(np.ma.masked_where(~f.walls, f.walls), origin="lower", extent=ext, cmap="Greys",
-              vmin=0, vmax=1.4)  # fmt: skip
+    ax.imshow(
+        np.ma.masked_where(~f.walls, f.walls),
+        origin="lower",
+        extent=ext,
+        cmap="Greys",
+        vmin=0,
+        vmax=1.4,
+    )
     draw_pipes(ax, f)
     ax.scatter(*f.exits.T, marker="D", s=70, c="gold", edgecolors="k", zorder=6)
     if labels:
         for i, (x, y) in enumerate(f.exits):
             off = (-16 if x > f.width / 2 else 6, -14 if y > f.height / 2 else 6)
-            ax.annotate(f"E{i}", (x, y), xytext=off, textcoords="offset points", fontsize=8,
-                        color="white", weight="bold")  # fmt: skip
+            ax.annotate(
+                f"E{i}",
+                (x, y),
+                xytext=off,
+                textcoords="offset points",
+                fontsize=8,
+                color="white",
+                weight="bold",
+            )
     ax.set_xlim(0, f.width)
     ax.set_ylim(0, f.height)
     ax.set_aspect("equal")
@@ -114,8 +161,13 @@ def draw(fig, axes, f: Factory, sc: Scenario, frames: list[PipelineFrame], k: in
         a.clear()
     ext = (0, f.width, 0, f.height)
     gx, gy = f.centres()[..., 0], f.centres()[..., 1]
-    ax.imshow(np.ma.masked_where(f.walls, np.maximum(fr.field, 1e-3)), origin="lower", extent=ext,
-              cmap="viridis", norm=LogNorm(1e-3, 10))  # fmt: skip
+    ax.imshow(
+        np.ma.masked_where(f.walls, np.maximum(fr.field, 1e-3)),
+        origin="lower",
+        extent=ext,
+        cmap="viridis",
+        norm=LogNorm(1e-3, 10),
+    )
     _plant(ax, f)
     if fr.harm.any():
         ax.contour(gx, gy, fr.harm.astype(float), levels=[0.5], colors="white", linewidths=1.4)
@@ -124,9 +176,18 @@ def draw(fig, axes, f: Factory, sc: Scenario, frames: list[PipelineFrame], k: in
         ax.contour(gx, gy, d, levels=[0.5], colors="red", linewidths=1.4, linestyles="--")
     if fr.source is not None:
         iy, ix = fr.source.top_cells(1)[0]
-        ax.scatter(*f.centre(int(iy), int(ix)), marker="o", s=260, facecolors="none",
-                   edgecolors="cyan", linewidths=2.2, zorder=7)  # fmt: skip
+        ax.scatter(
+            *f.centre(int(iy), int(ix)),
+            marker="o",
+            s=260,
+            facecolors="none",
+            edgecolors="cyan",
+            linewidths=2.2,
+            zorder=7,
+        )
     ax.scatter(*sc.source, marker="*", s=200, c="cyan", edgecolors="k", zorder=7)
+    for r in fr.routes[:-1]:  # earlier routes of the replanned person, faded
+        ax.plot(*r.T, c=STYLE["live"][0], lw=1.2, alpha=0.3, ls="-")
     for p in POLICIES[::-1]:
         w, (col, ls) = fr.walkers[p], STYLE[p]
         if w.trail:
@@ -134,6 +195,27 @@ def draw(fig, axes, f: Factory, sc: Scenario, frames: list[PipelineFrame], k: in
         if w.path is not None and w.out_at is None:
             ax.plot(*w.path.T, c=col, lw=2.4 if p == "live" else 1.6, ls=ls)
         ax.scatter(*w.pos, s=110 if p == "live" else 60, c=col, edgecolors="k", zorder=8)
+    from matplotlib.lines import Line2D
+
+    handles = [
+        Line2D([], [], c=STYLE[p][0], ls=STYLE[p][1], lw=2, marker="o", label=LABELS[p])
+        for p in POLICIES
+    ]
+    handles += [
+        Line2D(
+            [],
+            [],
+            c=STYLE["live"][0],
+            alpha=0.3,
+            lw=1.2,
+            label="earlier routes of the replanned person",
+        ),
+        Line2D([], [], c="white", lw=1.4, label="truly harmful now"),
+        Line2D([], [], c="red", ls="--", lw=1.4, label="Ahmad: harmful in 30 s"),
+        Line2D([], [], c="cyan", marker="o", ls="", label="Rayan's best guess (star = true leak)"),
+    ]
+    leg = ax.legend(handles=handles, loc="lower left", fontsize=6.5, framealpha=0.85)
+    leg.set_zorder(20)
     ax.set_title(f"t = {fr.t:.0f} s  |  {fr.phase}", fontsize=10, loc="left")
 
     last = fr.cycles[-1] if fr.cycles else None
@@ -151,8 +233,14 @@ def draw(fig, axes, f: Factory, sc: Scenario, frames: list[PipelineFrame], k: in
         _plant(a, f, labels=False)
         m = _danger_at(fr, fr.t + ahead)
         if m is not None:
-            a.imshow(np.ma.masked_where(f.walls, m), origin="lower", extent=ext, cmap="Reds",
-                     vmin=0, vmax=1)  # fmt: skip
+            a.imshow(
+                np.ma.masked_where(f.walls, m),
+                origin="lower",
+                extent=ext,
+                cmap="Reds",
+                vmin=0,
+                vmax=1,
+            )
         a.set_title(f"Ahmad: P(harm) {name}", fontsize=8)
 
     tl.set_xlim(0, t_max)
@@ -162,16 +250,29 @@ def draw(fig, axes, f: Factory, sc: Scenario, frames: list[PipelineFrame], k: in
         if c.t_start > fr.t:
             break
         tl.barh(c.index, c.locate_s, left=c.t_start, color="#19c3e6", height=0.6)
-        tl.barh(c.index, c.t_land - c.t_start - c.locate_s, left=c.t_start + c.locate_s,
-                color="#ff5252", height=0.6)  # fmt: skip
-        tl.text(c.t_land + 0.5, c.index, f"run {c.index + 1}: {c.samples} readings/sensor",
-                va="center", fontsize=7)  # fmt: skip
+        tl.barh(
+            c.index,
+            c.t_land - c.t_start - c.locate_s,
+            left=c.t_start + c.locate_s,
+            color="#ff5252",
+            height=0.6,
+        )
+        tl.text(
+            c.t_land + 0.5,
+            c.index,
+            f"run {c.index + 1}: {c.samples} readings/sensor",
+            va="center",
+            fontsize=7,
+        )
     if fr.t_alarm is not None:
         tl.axvline(fr.t_alarm, c="k", ls=":", lw=1)
     tl.axvline(fr.t, c="#555", lw=1.5)
     tl.set_yticks([])
-    tl.set_xlabel("seconds since the leak (dotted: alarm). Cyan = Rayan's model, red = Ahmad's "
-                  "model; each run starts when the last route has landed", fontsize=8)  # fmt: skip
+    tl.set_xlabel(
+        "seconds since the leak (dotted: alarm). Cyan = Rayan's model, red = Ahmad's "
+        "model; each run starts when the last route has landed",
+        fontsize=8,
+    )
     tl.tick_params(labelsize=7)
 
 
@@ -214,11 +315,153 @@ def save_run(folder: Path, sc: Scenario, frames: list[PipelineFrame], meta: dict
     return path
 
 
-def load_run(path: Path) -> tuple[Scenario, list[PipelineFrame], dict]:
-    """A run saved by ``save_run`` (only load files you made yourself: it is a pickle)."""
+def save_run_folder(
+    root: Path,
+    f: Factory,
+    sc: Scenario,
+    frames: list[PipelineFrame],
+    meta: dict,
+    t_max: float,
+    video: bool = True,
+) -> Path:
+    """One folder per run with everything needed for plots later.
+
+    ``run.pkl`` (replay), ``summary.json`` (settings, leak, every model run, outcomes),
+    ``cycles.csv`` (one row per model run), ``track.csv`` (every second: each person's
+    position, exit, in gas, dose; the phase), ``maps.npz`` (true gas per second, Rayan's
+    map and Ahmad's forecasts per run), ``still.png`` and ``video.mp4``.
+    """
+    import csv
+    import datetime as dt
+    import json
     import pickle
 
-    d = pickle.loads(Path(path).read_bytes())
+    cond = CONDITIONS[meta.get("condition", "standard")]
+    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    run = root / f"{stamp}-{meta.get('models', 'x')}-{cond.name}-seed{meta.get('seed', 0)}"
+    run.mkdir(parents=True, exist_ok=True)
+    (run / "run.pkl").write_bytes(pickle.dumps({"scenario": sc, "frames": frames, "meta": meta}))
+    cycles = frames[-1].cycles
+    exits = [
+        int(fr.walkers["live"].exit_index) for c in cycles for fr in frames if fr.t == c.t_land
+    ][: len(cycles)]
+    rows = [
+        {
+            "run": c.index + 1,
+            "t_start": c.t_start,
+            "t_land": c.t_land,
+            "readings_per_sensor": c.samples,
+            "locate_s": round(c.locate_s, 3),
+            "hazard_s": round(c.predict_s, 3),
+            "source_error_m": round(c.source_error_m, 2),
+            "size_est": round(c.rate_est, 3),
+            "size_true": round(sc.rate, 3),
+            "exit_after": exits[i] if i < len(exits) else None,
+            "top_guesses": [
+                {"xy": f.centre(int(a), int(b)).tolist(), "p": round(float(c.source.prob[a, b]), 4)}
+                for a, b in c.source.top_cells(3)
+            ],
+        }
+        for i, c in enumerate(cycles)
+    ]
+    last = frames[-1].walkers
+    people = {
+        p: {
+            "exit": int(w.exit_index) if w.exit_index is not None else None,
+            "out_at_s": w.out_at,
+            "harmful_s": w.harmful_s,
+            "dose": round(w.dose, 4),
+            "walked_m": round(w.walked, 2),
+        }
+        for p, w in last.items()
+    }
+    summary = {
+        "meta": meta,
+        "condition": cond.__dict__,
+        "leak": {
+            "xy": sc.source.tolist(),
+            "size": sc.rate,
+            "wind": sc.wind.tolist(),
+            "drift": sc.drift,
+        },
+        "t_alarm": frames[-1].t_alarm,
+        "cycles": rows,
+        "people": people,
+    }
+    (run / "summary.json").write_text(json.dumps(summary, indent=1, default=float))
+    with (run / "cycles.csv").open("w", newline="") as fh:
+        wr = csv.DictWriter(fh, [k for k in rows[0] if k != "top_guesses"] if rows else ["run"])
+        wr.writeheader()
+        for r in rows:
+            wr.writerow({k: v for k, v in r.items() if k != "top_guesses"})
+    with (run / "track.csv").open("w", newline="") as fh:
+        cols = ["t", "phase", "alarm", "runs_landed"]
+        for p in POLICIES:
+            cols += [f"{p}_x", f"{p}_y", f"{p}_exit", f"{p}_in_gas", f"{p}_dose", f"{p}_out"]
+        wr = csv.DictWriter(fh, cols)
+        wr.writeheader()
+        for fr in frames:
+            row = {
+                "t": fr.t,
+                "phase": fr.phase,
+                "alarm": int(fr.alarm),
+                "runs_landed": len(fr.cycles),
+            }
+            for p, w in fr.walkers.items():
+                iy, ix = f.cell_of(w.pos)
+                row |= {
+                    f"{p}_x": round(float(w.pos[0]), 2),
+                    f"{p}_y": round(float(w.pos[1]), 2),
+                    f"{p}_exit": w.exit_index,
+                    f"{p}_in_gas": int(fr.harm[iy, ix] and w.out_at is None),
+                    f"{p}_dose": round(w.dose, 4),
+                    f"{p}_out": int(w.out_at is not None),
+                }
+            wr.writerow(row)
+    np.savez_compressed(
+        run / "maps.npz",
+        times=np.array([fr.t for fr in frames]),
+        true_gas=np.stack([fr.field for fr in frames]).astype(np.float32),
+        walls=f.walls,
+        cycle_start=np.array([c.t_start for c in cycles]),
+        source_prob=np.stack([c.source.prob for c in cycles]).astype(np.float32)
+        if cycles
+        else np.zeros((0, f.ny, f.nx)),
+        hazard_times=np.stack([c.hazard.times for c in cycles]) if cycles else np.zeros((0, 0)),
+        p_toxic=np.stack([c.hazard.p_toxic for c in cycles]).astype(np.float32)
+        if cycles
+        else np.zeros((0,)),
+        p_fire=np.stack([c.hazard.p_fire for c in cycles]).astype(np.float32)
+        if cycles
+        else np.zeros((0,)),
+    )
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, axes = figure(f)
+    end = end_frame(frames)
+    k = frames[-1].cycles[0].t_land if frames[-1].cycles else end
+    draw(fig, axes, f, sc, frames, int(min(k + 3, end)), t_max)
+    fig.savefig(run / "still.png", dpi=80)
+    plt.close(fig)
+    if video:
+        save_video(f, sc, frames, run / "video.mp4", t_max)
+    return run
+
+
+def load_run(path: Path) -> tuple[Scenario, list[PipelineFrame], dict]:
+    """A run saved by ``save_run`` or ``save_run_folder`` (a folder or its ``run.pkl``).
+
+    Only load files you made yourself: it is a pickle.
+    """
+    import pickle
+
+    path = Path(path)
+    if path.is_dir():
+        path = path / "run.pkl"
+    d = pickle.loads(path.read_bytes())
     return d["scenario"], d["frames"], d["meta"]
 
 
@@ -230,8 +473,15 @@ def end_frame(frames: list[PipelineFrame]) -> int:
     return min(len(frames) - 1, (done[0] if done else len(frames) - 1) + 5)
 
 
-def save_video(f: Factory, sc: Scenario, frames: list[PipelineFrame], path: Path, t_max: float,
-               end: int | None = None, fps: int = 4) -> Path:  # fmt: skip
+def save_video(
+    f: Factory,
+    sc: Scenario,
+    frames: list[PipelineFrame],
+    path: Path,
+    t_max: float,
+    end: int | None = None,
+    fps: int = 4,
+) -> Path:
     """MP4 of the run (one frame per simulated second); GIF if ffmpeg is missing."""
     import shutil
 
@@ -337,7 +587,16 @@ def main() -> int:
     p.add_argument("--at", type=float, nargs=2, metavar=("X", "Y"), help="person start (m)")
     p.add_argument("--max-runs", type=int, default=8)
     p.add_argument("--t-max", type=float, default=120.0)
-    p.add_argument("--load", type=Path, help="replay a saved run (no model calls, no tokens)")
+    p.add_argument(
+        "--condition",
+        default="standard",
+        choices=list(CONDITIONS),
+        help="stress: mixing, wind drift, sensor faults (Ahmad's scenarios)",
+    )
+    p.add_argument("--no-video", action="store_true", help="skip the MP4 in the run folder")
+    p.add_argument(
+        "--load", type=Path, help="replay a saved run folder (no model calls, no tokens)"
+    )
     p.add_argument("--video", type=Path, help="save the run as an MP4 and exit")
     p.add_argument("--gif", type=Path)
     p.add_argument("--still", type=Path)
@@ -346,18 +605,34 @@ def main() -> int:
     if a.load:
         sc, frames, meta = load_run(a.load)
         print(f"replaying {a.load} ({meta})")
-        stem = a.load.with_suffix("")
+        stem = (a.load if a.load.is_dir() else a.load.parent) / "video"
     else:
         if a.backend == "cloud" and a.models == "team" and not a.yes:
-            print(f"cloud run: up to {a.max_runs} runs x ~3 TabPFN calls (>= "
-                  f"{a.max_runs * 30_000:,} tokens). Re-run with --yes to spend them.")  # fmt: skip
+            print(
+                f"cloud run: up to {a.max_runs} runs x ~3 TabPFN calls (>= "
+                f"{a.max_runs * 30_000:,} tokens). Re-run with --yes to spend them."
+            )
             return 1
-        sc, frames = compute(f, a.seed, a.at, a.models, a.backend, a.max_runs, a.t_max)
-        meta = {"models": a.models, "backend": a.backend, "seed": a.seed, "at": a.at,
-                "max_runs": a.max_runs}  # fmt: skip
-        path = save_run(RUNS, sc, frames, meta)
-        stem = path.with_suffix("")
-        print(f"saved: {path}  (replay for free: uv run evac-pipeline --load {path})")
+        sc, frames = compute(
+            f, a.seed, a.at, a.models, a.backend, a.max_runs, a.t_max, condition=a.condition
+        )
+        meta = {
+            "models": a.models,
+            "backend": a.backend,
+            "seed": a.seed,
+            "at": a.at,
+            "max_runs": a.max_runs,
+            "condition": a.condition,
+        }
+        if not a.no_video:
+            print("saving the run folder and its video (about a minute)...")
+        run = save_run_folder(RUNS, f, sc, frames, meta, a.t_max, video=not a.no_video)
+        stem = run / "video"
+        print(
+            f"saved: {run}/  (summary.json, cycles.csv, track.csv, maps.npz, still.png"
+            f"{', video.mp4' if not a.no_video else ''}, run.pkl)"
+        )
+        print(f"replay for free: uv run evac-pipeline --load {run}")
     if a.video:
         print("video:", save_video(f, sc, frames, a.video, a.t_max))
     if a.gif or a.still:

@@ -4,7 +4,7 @@ import numpy as np
 
 from tabpfn_spatial.contracts import SensorReadings
 from tabpfn_spatial.sim.factory import Factory
-from tabpfn_spatial.sim.plume import Scenario, simulate, wind_at
+from tabpfn_spatial.sim.plume import DIFFUSIVITY, Scenario, simulate, wind_at
 
 
 def sample_scenarios(
@@ -80,6 +80,7 @@ def readings(
     wind_noise: float = 0.1,
     dropout: float = 0.0,
     stuck: float = 0.0,
+    diffusivity: float = DIFFUSIVITY,
 ) -> SensorReadings:
     """Noisy sensor series 0..t_obs and the measured wind (mean over the window).
 
@@ -88,7 +89,7 @@ def readings(
     treat NaN as "no reading", e.g. ``np.nan_to_num`` or a missing-value flag column.
     """
     times = np.arange(0.0, t_obs + 1e-9, every)
-    clean = sensor_values(factory, simulate(factory, [scenario], times)[0]).T  # (k, t)
+    clean = sensor_values(factory, simulate(factory, [scenario], times, d=diffusivity)[0]).T
     noisy = clean * (1 + noise * rng.standard_normal(clean.shape))
     noisy += floor * rng.standard_normal(clean.shape)
     values = np.maximum(noisy, 0.0)
