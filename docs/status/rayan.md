@@ -4,10 +4,25 @@ Only Rayan's agent edits this file. Update it before every PR.
 
 ## Doing
 
-- Waiting for review of PR #25. Next ideas: extend the table past alarm + 30 s; check
-  drifting wind and sensor dropouts.
+- Leak height (3D): study PR open (this branch). Next: height inside `TabPFNLocator`
+  (live mode, prior before the alarm, joined with the floor classifier) on the stand-in,
+  then switch to Steven's simulator with heights and rerun the same study.
 
 ## Done
+
+- **Leak height on vertical pipes is learnable** (`source/vertical.py` stand-in,
+  `source/height_study.py`; details and figures in `docs/journey/rayan.md`). Median height
+  error at alarm + 15 s, 200 test leaks, guessing the middle = 1.6 m:
+
+  | Layout | Methane TabPFN | Methane k-NN | Propane TabPFN | Propane k-NN |
+  |---|---|---|---|---|
+  | All 14 detectors at 1.5 m | 0.61 m (90/200 alarm) | 0.76 m | 1.19 m | 1.43 m |
+  | **+ masts at vertical pipes (26)** | **0.26 m** | 0.36 m | **0.28 m** | 0.40 m |
+  | 3 heights everywhere (42) | 0.67 m | 0.77 m | 0.72 m | 0.82 m |
+
+  Settings: default plant, 4 vertical pipes, 600 train leaks (seed 100), 200 test (seed
+  200), alarm + 0..30 s, backend cloud, 60,000 tokens. The height physics is a stand-in
+  with two assumed ranges until `sim/` has heights.
 
 - **Locator answers at the alarm and every 5 s after it** (PR #25, `source/`), on the
   pipe plant from #23. Clock starts at the first alarm (a real plant does not know when
@@ -53,6 +68,11 @@ Only Rayan's agent edits this file. Update it before every PR.
 - Finished GitHub setup.
 
 ## Needs
+
+- For 3D (Steven is on it; list in the height PR): heights in `sim/` (hall, machines, pipe
+  sections and which are vertical, detector heights), a time-stepped 3D gas backend, and
+  the contract fields (detector heights in `SensorReadings`, leak height in
+  `SourceEstimate`). `source/vertical.py` is only a stand-in until then.
 
 - Nothing blocking. Note for Steven: `pipeline.evaluate` / `sync-check` at t_obs 60 s can
   ask for moments beyond alarm + 30 s, which the table does not cover yet (works, but less
