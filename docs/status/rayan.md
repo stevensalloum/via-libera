@@ -4,10 +4,39 @@ Only Rayan's agent edits this file. Update it before every PR.
 
 ## Doing
 
-- Waiting for review of PR #25. Next ideas: extend the table past alarm + 30 s; check
-  drifting wind and sensor dropouts.
+- Leak height (3D): PR #50 (stand-in study + the same study on Steven's 3D simulator +
+  `HeightLocator`). Next: the real-data check on Orebro3DSEN, and the 7-plant run
+  (`source.height_plants3d`, written, not run).
 
 ## Done
+
+- **Leak height on Steven's 3D simulator** (`sim.plant3d` + `sim.gas3d`; `source.vertical3d`,
+  `source.height_study3d`). Mean height error at the alarm / + 15 s, default plant, 600
+  training and 200 test leaks, backend cloud (8 calls, ~80,000 tokens):
+
+  | Layout | Methane TabPFN | Methane k-NN | Propane TabPFN | Propane k-NN |
+  |---|---|---|---|---|
+  | Mounted only (14) | 0.74 / 0.73 m | 0.73 / 0.73 | 0.72 / 0.70 | 0.73 / 0.75 |
+  | **Masts on the pipe (32)** | **0.19 / 0.18** | 0.22 / 0.34 | **0.19 / 0.17** | 0.24 / 0.36 |
+  | **Masts 1 m beside (32)** | **0.20 / 0.21** | 0.32 / 0.46 | **0.24 / 0.26** | 0.34 / 0.49 |
+  | 3 heights everywhere (42) | 0.42 / 0.45 | 0.69 / 0.67 | 0.47 / 0.49 | 0.69 / 0.71 |
+
+  Guess: 0.76 m; best the 1 m voxels allow: 0.17 m. Model for the pipeline:
+  `source.HeightLocator` fills `SourceEstimate.height` (19 quantiles).
+
+- **Leak height on vertical pipes is learnable** (`source/vertical.py` stand-in,
+  `source/height_study.py`; details and figures in `docs/journey/rayan.md`). Median height
+  error at alarm + 15 s, 200 test leaks, guessing the middle = 1.6 m:
+
+  | Layout | Methane TabPFN | Methane k-NN | Propane TabPFN | Propane k-NN |
+  |---|---|---|---|---|
+  | All 14 detectors at 1.5 m | 0.61 m (90/200 alarm) | 0.76 m | 1.19 m | 1.43 m |
+  | **+ masts at vertical pipes (26)** | **0.26 m** | 0.36 m | **0.28 m** | 0.40 m |
+  | 3 heights everywhere (42) | 0.67 m | 0.77 m | 0.72 m | 0.82 m |
+
+  Settings: default plant, 4 vertical pipes, 600 train leaks (seed 100), 200 test (seed
+  200), alarm + 0..30 s, backend cloud, 60,000 tokens. The height physics is a stand-in
+  with two assumed ranges until `sim/` has heights.
 
 - **Locator answers at the alarm and every 5 s after it** (PR #25, `source/`), on the
   pipe plant from #23. Clock starts at the first alarm (a real plant does not know when
@@ -53,6 +82,10 @@ Only Rayan's agent edits this file. Update it before every PR.
 - Finished GitHub setup.
 
 ## Needs
+
+- From Steven (pipeline): pass `Run3D.readings` (with `heights`) to the source part on 3D
+  plants and call `HeightLocator.attach`; see the PR #50 note. The 1 m voxels cap the
+  height accuracy at 0.17 m (finer voxels near vertical pipes would lower it).
 
 - Nothing blocking. Note for Steven: `pipeline.evaluate` / `sync-check` at t_obs 60 s can
   ask for moments beyond alarm + 30 s, which the table does not cover yet (works, but less
