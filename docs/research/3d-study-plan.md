@@ -110,6 +110,77 @@ That is the reason workflow A is worth testing at all.
 
 Not downloaded (disk space). Not needed if GADEN runs locally.
 
+
+## What each dataset measures: sensors, rows, features (plain language)
+
+Common words:
+- **MOX (metal-oxide) sensor:** a heated tin-oxide film whose electrical resistance changes
+  when gas molecules react on it. Cheap and sensitive, but slow (seconds to recover), not
+  specific to one gas, and it drifts with temperature and humidity. It gives a *signal*,
+  not ppm, unless it is calibrated.
+- **PID (photo-ionisation detector):** UV light ionises volatile molecules and the current
+  is measured. Fast and proportional to concentration, so it is the **reference** sensor.
+- **Anemometer:** measures wind (speed, or the full 3D vector u, v, w).
+- A **row** for TabPFN is one measurement: *where* (x, y, z), *when* (t), *conditions*
+  (wind, source, obstacles) -> *what was measured* (concentration).
+
+### Red:Vapor (figure `docs/figures/3d-study/data_redvapor.png`)
+- **Sensors on one probe, moved by a gantry:** PID-AH2 (reference, relative ppm), MiCS-5524
+  and MiCS-6814 (MOX), BME680 (temperature, humidity, pressure), a 3D ultrasonic anemometer.
+- **A row:** one voxel (12 x 12 x 8 cm) of the 1:50 site, averaged over its 5 s dwell
+  (20-30 s for setup B): x, y, z, PID, MOX, 3D wind. 784-4,728 voxels per experiment, 8
+  experiments, 4 leak positions.
+- **Features we derive:** distance downwind and crosswind of the leak, height, height
+  above the release, wind speed, "is a building between the leak and this voxel".
+  **Target:** PID excess above the upwind background (relative units).
+- **What the figure shows:**
+  - downwind of the leak the fog is densest at 0.26 m, just above the 0.18 m release, and
+    falls to 10-40 % of that peak above 0.5 m;
+  - at 3.6 m/s it stays lower (setup B: 3 % of the peak above 0.5 m);
+  - in the full site (C) the plume is channelled between buildings (white cells = solid).
+
+### Örebro 3DSEN (figure `data_orebro.png`)
+- **Sensors:** 27 Figaro TGS MOX (several models), each calibrated to ppm in a lab, on 9 poles
+  x 3 heights (0.45, 1.20, 2.23 m); 4 temperature + 4 humidity (DHT22); wind speed and
+  direction at 1.3 m. 2 Hz, about 1.9 h per experiment.
+- **A row:** one sensor at one time: x, y, z, t, source position, airflow setting ->
+  ppm. Here the 27 sensors read **at the same time**, which no other dataset has.
+- **What the figure shows (mean over the run, per height):**
+  - with the HVAC (in at floor, out at ceiling) and normal sources, the **middle and top
+    layers read 2-5x the bottom one**, even for sources on the floor (exp 3);
+  - **the exception is exp 5:** a large source on the floor *with a bubbler* (much higher
+    release rate) is highest at the floor. So height structure from gas density appears only
+    for strong releases; weak releases follow the room air;
+  - exp 4 (source at 2.0 m near the open window) is highest at the top.
+
+### UCI 251 (figure `data_uci.png`)
+- **Sensors:** 9 boards x 8 MOX (Figaro TGS; models listed in Vergara et al. 2013, not on
+  the dataset page), across the 1.2 m tunnel width, at one of 6 distances (L1 nearest the
+  gas inlet; distances in the paper's Fig. 2, to be checked) at a time. Fan 1500 / 3900 /
+  5500 rpm. Heater 5.0 V kept (the others respond about the same).
+- **Timing (measured from the valve columns):** clean air 0-20 s, gas 20-200 s, clean air
+  after.
+- **A row:** one run: gas, its cylinder ppm, line (distance), fan, board (crosswind
+  position) -> relative signal change R/R0 - 1, sampled every 5 s.
+- **What the figure shows:**
+  - **only the centre board (5) responds**: the plume is narrower than the 13 cm board
+    spacing, so 8 of 9 boards see almost nothing;
+  - on board 5 the signal falls with distance (slow fan: 47 % at L1 to 4 % at L6) and with
+    wind speed (more dilution);
+  - the stored value **rises** in gas, although the page calls it a resistance (a MOX
+    resistance should fall): we use the relative change and report the doubt.
+- **Limits:** no height, no obstacles: a 1D distance check.
+
+### SRGDM (figure `data_srgdm.png`)
+- **Synthetic part:** 2D plumes on a 30 x 25 cell grid, simulated with **wind recorded in a
+  real room** on 4 days ("seasons"), 30 source positions, 180 frames each, values 0..1.
+- **Real part:** a 6 x 5 grid of real gas sensors, 3800 frames x 30 segments per recording
+  day, values 0..1. What the first axis means is not documented, so we use it only for
+  field statistics.
+- **A row:** one cell at one frame: (row, column, t, source cell, season) -> value.
+- **What the figure shows:** a meandering, intermittent plume (one frame is patchy, the
+  mean is smooth); at the 6 x 5 sensor spacing most of the plume shape is lost.
+
 ## Physics ladder (simple -> near-real), each level checked against real data
 
 | Level | Model | Parameters from |
@@ -167,3 +238,25 @@ Not downloaded (disk space). Not needed if GADEN runs locally.
   - running: UCI zip (7.8 GB) in the background.
   - **Still to fetch:** SRGDM `30x25_multipleSources/test.pt` (came back empty); torch is
     needed to convert the SRGDM tensors.
+
+### 2026-11-22, session 2
+
+- **Data kept small (Steven: "lower sample rates and less data"):** UCI 8.4 GB zip -> 14 MB
+  (5.0 V heater, one sample every 5 s = our detectors' period; 46 of 3630 files broken
+  and skipped). SRGDM read without torch. Red:Vapor voxel maps (9 MB) are the main file;
+  its 2 GB time series will be cut to a small extract or deleted.
+- **GADEN core builds natively on macOS** (more portability fixes: `std::chrono::_V2`
+  in Profiling.hpp and Time.hpp, missing `<sstream>` in STL.hpp). A small driver
+  (`~/dev/gaden/driver/gaden_run.cpp`) runs one case and samples ppm at given points.
+- **How GADEN really works (read from the source, `src/RunningSimulation.cpp`):**
+  - each filament moves with the wind of its cell + Gaussian noise (0.01-0.02 m/s);
+  - its width grows as sigma^2 = sigma0^2 + gamma t; a puff obeys sigma^2 = 2 K t, so
+    **gamma = 2 K**. The default gamma = 10 cm^2/s means K = 5e-4 m^2/s, below indoor
+    turbulent diffusivities (~1e-3 to 1e-2 m^2/s): to be calibrated;
+  - **buoyancy is a heuristic:** a Stokes terminal velocity without the particle diameter,
+    scaled by the filament's centre ppm. It is not dimensionally consistent, so GADEN's
+    height behaviour must be checked against real data, not trusted;
+  - GADEN lists ethanol at specific gravity 1.04; ethanol vapour is 1.59;
+  - wind is an input CSV (cell centres, u v w): any flow solver can produce it, not only
+    OpenFOAM.
+- **Dataset overview figures** in `docs/figures/3d-study/`; findings in the section above.
