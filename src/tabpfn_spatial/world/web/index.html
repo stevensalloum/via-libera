@@ -56,18 +56,18 @@
     <p class="kicker">2 · Today: the shortest path to the nearest exit</p>
     <h2>Green signs point to the nearest door, even when it is inside the cloud.</h2>
     <p>Evacuation plans are fixed: the shortest path (Dijkstra) to the nearest exit, printed on the
-      wall. They ignore where the gas is. Same leaks, same people, our 9 test plants:</p>
+      wall. They ignore where the gas is. Same leaks, same people, 15 test plants (5 known, 10 never seen):</p>
     <table class="compare">
       <thead><tr><th></th><th>Shortest path<br /><small>fixed signs, gas ignored</small></th><th>Via Libera</th><th>change</th></tr></thead>
       <tbody>
-        <tr><td>average time in gas per person</td><td>0.50 s</td><td><b>0.12 s</b></td><td class="good">−76 %</td></tr>
-        <tr><td>worst 5 % of people (95th percentile)</td><td>3.8 s</td><td><b>0.6 s</b></td><td class="good">−84 %</td></tr>
-        <tr><td>people who breathe gas at all</td><td>4.9 %</td><td><b>2.4 %</b></td><td class="good">−52 %</td></tr>
+        <tr><td>average time in gas per person</td><td>0.50 s</td><td><b>0.09 s</b></td><td class="good">−83 %</td></tr>
+        <tr><td>worst 5 % of people (95th percentile, 9 plants)</td><td>3.8 s</td><td><b>0.6 s</b></td><td class="good">−84 %</td></tr>
+        <tr><td>people who breathe gas at all</td><td>5.0 %</td><td><b>1.8 %</b></td><td class="good">−64 %</td></tr>
         <tr><td>worst-off person (demo leak)</td><td>24 s</td><td><b>2 s</b></td><td class="good">−92 %</td></tr>
-        <tr><td>time until 95 % are out</td><td>42 s</td><td><b>41 s</b></td><td>no slower</td></tr>
+        <tr><td>time until 95 % are out (9 plants)</td><td>42 s</td><td><b>41 s</b></td><td>no slower</td></tr>
       </tbody>
     </table>
-    <p class="note">On plants the models had never seen: 0.84 s → 0.09 s per person (−89 %). Cloud TabPFN, 3D gas, alarm from noisy detectors.
+    <p class="note">On the 10 plants the models had never seen: 0.63 s → 0.06 s per person (−90 %), as good as perfect knowledge of the gas. Cloud TabPFN, 3D gas, alarm from noisy detectors, one leak per plant.
       Source: <code>docs/results/final-table.md</code>.</p>
   </section>
 
@@ -148,9 +148,9 @@
     <p class="kicker">7 · Results</p>
     <h2>Less gas, same speed, on layouts it has never seen.</h2>
     <div class="meters big">
-      <div class="meter"><b data-count="-76" data-unit=" %">0</b><span>time in gas per person</span></div>
-      <div class="meter"><b data-count="-89" data-unit=" %">0</b><span>on unseen plants</span></div>
-      <div class="meter"><b data-count="-52" data-unit=" %">0</b><span>people exposed</span></div>
+      <div class="meter"><b data-count="-83" data-unit=" %">0</b><span>time in gas per person (15 plants)</span></div>
+      <div class="meter"><b data-count="-90" data-unit=" %">0</b><span>on 10 plants never seen</span></div>
+      <div class="meter"><b data-count="-64" data-unit=" %">0</b><span>people exposed</span></div>
       <div class="meter"><b data-count="5" data-unit=" s">0</b><span>to the alarm, from noisy detectors</span></div>
     </div>
   </section>

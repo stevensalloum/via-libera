@@ -26,6 +26,10 @@ noisy detectors, models updated every 15 s ([table](docs/results/final-table.md)
 | 95 % of people out: nearest exit / Via Libera | 41 s / 42 s | 43 s / 40 s |
 | leak position / height error (median) | 1.1 m / 0.95 m | 0.6 m / 0.58 m |
 
+With Rayan's 6 further unseen plants (15 plants, 10 never seen, one leak each): seconds in gas
+per person 0.50 s → **0.09 s (−83 %)**, on unseen plants 0.63 s → **0.06 s (−90 %)**, people
+exposed 5.0 % → **1.8 % (−64 %)**, as good as perfect knowledge of the gas.
+
 On real gas measurements TabPFN locates the leak better than a classic k-NN on the same rows
 (Red:Vapor 0.38 m vs 0.64 m; SRGDM 0.83 vs 1.50 cells) and ranks hot zones at least as well
 (AUC 0.88 / 0.62 / 0.98 vs 0.88 / 0.60 / 0.94 on Red:Vapor, Örebro, UCI).
@@ -36,7 +40,7 @@ Figures: [docs/figures/final](docs/figures/final).
 **One command, nothing computed, no tokens:**
 
 ```bash
-uv run via-libera              # opens the saved cloud run (demo/T-plant-cloud) in the browser
+uv run via-libera              # the story page + live map, "Enter the factory" for 3D (saved cloud run)
 ```
 
 The viewer loads Three.js from a CDN: have internet (or a phone hotspot) on the demo laptop.

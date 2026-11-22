@@ -33,3 +33,13 @@ _pending_
 ## Hard case (`--stress`: low leaks near people, 2x rate, updates every 5 s)
 
 _pending: Rayan's run_
+
+## Rayan's unseen plants (6 more, cloud)
+
+From `docs/journey/rayan.md` (L, U, T, campus at seeds 151-152): seconds in gas per person 0.49
+(nearest exit) -> 0.04 (CCRP / risk-aware), perfect models 0.06; exposed 5.3 % -> 1.0 %; median
+leak error 0.6 m (0.2 m at the alarm), height 0.55 m, alarm at 5 s.
+
+**All 15 plants** (5 known + 10 unseen, one leak each, plant means weighted equally):
+0.50 s -> 0.09 s per person (-83 %); unseen only 0.63 s -> 0.06 s (-90 %); exposed 5.0 % ->
+1.8 % (-64 %).
