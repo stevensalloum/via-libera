@@ -1,9 +1,11 @@
-"""``uv run gallery M2``: one page with every video, graph and 3D replay of a milestone.
+"""``uv run gallery Final``: one page with every video, graph and 3D replay, in pitch order.
 
 Creates ``milestones/<name>-<date>/`` (git-ignored) with:
 - ``videos/``: every replay video recorded in the 3D viewer (``outputs/world/replay-*/videos``),
   converted to H.264 MP4 (ffmpeg), captioned from the run's own data;
-- ``figures/``: the study figures from ``docs/figures`` (grouped and captioned);
+- ``figures/``: the figures of ``docs/figures`` in the order of the pitch (``SECTIONS``),
+  named ``<section>-<folder>-<file>``;
+- 2D videos of ``evac-pipeline`` runs (``outputs/pipeline/*/video.mp4``);
 - ``replays/``: each replay's ``scene.json`` + ``replay.json``, to open again in 3D with
   ``uv run world --keep --out <folder>``;
 - ``index.html``: the gallery (open it in a browser).
@@ -19,27 +21,48 @@ from pathlib import Path
 
 FIGURES = Path("docs/figures")
 REPLAYS = Path("outputs/world")
-GROUPS = (
-    ("Unseen factory shapes (24 new plants, cloud TabPFN)", "shapes", {
-        "plants.png": "Examples of the unseen plants: exits, detectors, pipes, AGV lanes.",
-        "gains.png": "What the gas-aware planners save against nearest exit, per shape.",
-        "scores.png": "Seconds in gas, % exposed, time to 95 % out, per shape (team's models).",
-        "locator.png": "Leak position error of the locators on unseen plants.",
-    }),
-    ("3D study: real data vs simulation", "3d-study", {
-        "verdict.png": "Where each workflow works (hazard task, cloud TabPFN).",
-        "ladder.png": "Physics ladder (plume to CFD and GADEN) against real data.",
-        "profiles.png": "Does height come out right? Real vs simulated vertical profiles.",
-        "transfer_hazard.png": "Hazard task: real -> real, A, B, hybrid, physics.",
-        "transfer_source.png": "Source task: leak position error per workflow.",
-        "heights.png": "Within how many metres of a leak gas density decides height.",
-        "data_redvapor.png": "Red:Vapor: real fog plume around a 1:50 industrial site.",
-        "data_orebro.png": "Örebro: real office with HVAC, 27 sensors at 3 heights.",
-        "data_uci.png": "UCI 251: MOX response along and across a wind tunnel.",
-        "data_srgdm.png": "SRGDM: plumes from measured airflow and a real 6 x 5 grid.",
-    }),
-    ("Evacuation (Steven)", "steven", {}),
-    ("Hazard (Ahmad)", "ahmad", {}),
+PIPELINE = Path("outputs/pipeline")  # 2D runs of ``evac-pipeline`` (video.mp4 each)
+# The pitch, in order: (section, [(figure folder, file, caption)]). Missing files are skipped.
+SECTIONS = (
+    ("1 · The setting: a gas leak in a factory", [
+        ("shapes", "plants.png", "Plants of every shape: exits, detectors, gas pipes, AGV lanes."),
+        ("steven", "01-pipes.png", "Leaks happen on the pipes; detectors on walls and masts."),
+        ("3d-study", "data_redvapor.png", "Real gas: a fog plume around a 1:50 industrial site."),
+    ]),
+    ("2 · Today: fixed signs to the nearest exit", [
+        ("final", "1-exposure.png", "Same leaks, same people: nearest exit vs Via Libera."),
+        ("steven", "02-evac-live.png", "Nearest exit (red) walks into the gas; the live route "
+                                       "(green) goes around it."),
+    ]),
+    ("3 · Via Libera: find the leak, predict the gas, route everyone", [
+        ("steven", "06-crowd-run.png", "A whole crowd, every planner, the same leak."),
+        ("shapes", "gains.png", "What the gas-aware planners save, per plant shape."),
+    ]),
+    ("4 · How: three steps, each a TabPFN model", [
+        ("rayan", "height3d-3-tabpfn-vs-knn.png", "1 · Find the leak (Rayan): position and "
+                                                    "height from the detectors."),
+        ("ahmad", "08-hazard-3d.png", "2 · Predict the gas (Ahmad): where it will be harmful, "
+                                      "in 3D."),
+        ("steven", "05-crowd-ladder.png", "3 · Route everyone (Steven): CCRP plans every "
+                                          "person around the predicted gas."),
+        ("steven", "04-sync-timeline.png", "The loop: detectors every 5 s, models every 15 s."),
+    ]),
+    ("5 · Scaling to 3D", [
+        ("3d-study", "verdict.png", "Simulation vs real data: where each workflow works."),
+        ("3d-study", "ladder.png", "Physics ladder up to CFD: calibrated simple physics suffices."),
+        ("3d-study", "heights.png", "Light gas rises, heavy gas sinks, only near the leak."),
+        ("rayan", "height3d-2-detection-methane.png", "Masts at vertical pipes find the height."),
+    ]),
+    ("6 · Why TabPFN", [
+        ("final", "3-accuracy-real.png", "Real gas data: TabPFN vs a classic k-NN."),
+        ("final", "2-accuracy-factory.png", "3D factory: TabPFN vs k-NN, per plant."),
+        ("final", "4-compute.png", "No training, cheap physics, fast updates."),
+        ("shapes", "locator.png", "Leak position error on unseen plants."),
+    ]),
+    ("7 · Next", [
+        ("final", "5-stress.png", "The hard case: low leaks near people, updates every 5 s."),
+        ("ahmad", "05-threshold-tradeoff.png", "Alarm threshold: early vs false alarms."),
+    ]),
 )  # fmt: skip
 
 
@@ -89,19 +112,23 @@ def collect(root: Path) -> dict:
             path = mp4 or Path(shutil.copy(webm, root / "videos" / f"{folder.name}-{webm.name}"))
             out["videos"].append({"path": path.relative_to(root), "title": rep["rung"],
                                   "caption": _caption(rep, planner)})  # fmt: skip
-    for title, sub, captions in GROUPS:
-        src = FIGURES / sub
-        if not src.exists():
-            continue
-        items = []
-        for png in sorted(src.glob("*.png"), key=lambda q: (q.name not in captions, q.name)):
-            dst = root / "figures" / sub / png.name
+    for title, items in SECTIONS:
+        shown = []
+        for sub, name, cap in items:
+            src = FIGURES / sub / name
+            if not src.exists():
+                continue
+            dst = root / "figures" / f"{title[0]}-{sub}-{name}"
             dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy(png, dst)
-            items.append(
-                {"path": dst.relative_to(root), "caption": captions.get(png.name, png.stem)}
-            )
-        out["groups"].append({"title": title, "items": items})
+            shutil.copy(src, dst)
+            shown.append({"path": dst.relative_to(root), "caption": cap})
+        out["groups"].append({"title": title, "items": shown})
+    for run in sorted(PIPELINE.glob("*/video.mp4")):  # 2D single-person runs
+        dst = root / "videos" / f"2d-{run.parent.name}.mp4"
+        shutil.copy(run, dst)
+        cap = "One person, the team's models back to back (2D)."
+        title = f"2D · {run.parent.name}"
+        out["videos"].append({"path": dst.relative_to(root), "title": title, "caption": cap})
     return out
 
 
@@ -151,6 +178,7 @@ def main() -> int:
     items = collect(root)
     index = root / "index.html"
     index.write_text(page(a.name, items))
+    shutil.copy(Path(__file__).parent / "world" / "web" / "logo.webp", root / "logo.webp")
     print(f"{len(items['videos'])} videos, {sum(len(g['items']) for g in items['groups'])} "
           f"figures, {len(items['replays'])} replays")  # fmt: skip
     print(index.resolve())

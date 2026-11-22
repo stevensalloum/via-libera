@@ -1,10 +1,11 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{name}: gas-leak evacuation</title>
+<title>Via Libera · {name}</title>
 <style>
-:root {{ --bg: #f6f7f9; --card: #ffffff; --ink: #1f2328; --muted: #59636e; --line: #d8dee4; }}
-@media (prefers-color-scheme: dark) {{ :root {{ --bg: #0f1216; --card: #171b21; --ink: #e6edf3;
-  --muted: #8b949e; --line: #2d333b; }} }}
+:root {{ --bg: #0b1622; --card: #102234; --ink: #e6eef5; --muted: #8ba3b8; --line: #22405c;
+  --accent: #f39200; }}
+h2 {{ color: var(--accent); }}
+.logo {{ height: 64px; background: #fff; border-radius: 8px; padding: 6px 12px; }}
 body {{ margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, sans-serif; }}
 main {{ max-width: 1280px; margin: 0 auto; padding: 24px 16px 64px; }}
 h1 {{ font-size: 26px; margin: 0 0 4px; }} h2 {{ font-size: 19px; margin: 36px 0 12px; }}
@@ -17,12 +18,11 @@ p.lead {{ color: var(--muted); margin: 0 0 8px; }}
 code {{ background: var(--card); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; }}
 ul.cmds li {{ margin: 4px 0; }}
 </style></head><body><main>
-<h1>{name}: gas leak in a factory, closed loop with TabPFN</h1>
-<p class="lead">Made {date} by <code>uv run gallery {name}</code>. Rayan's locator and Ahmad's
-hazard predictor on cloud TabPFN; Steven's crowd planners (nearest exit, risk-aware, CCRP);
-AGVs stop at the alarm; height zone around the leak.</p>
-<p class="lead">Note: the alarm still fires on the simulated gas, not on the noisy detector
-readings (Ahmad's fix is pending); the final run will use his version.</p>
+<img class="logo" src="logo.webp" alt="Via Libera">
+<h1>Via Libera · {name}</h1>
+<p class="lead">Find the leak, predict the gas, route everyone out. Made {date} by
+<code>uv run gallery {name}</code>: 3D gas, Rayan's leak locator and Ahmad's hazard model on
+TabPFN, Steven's crowd planners.</p>
 {videos}
 {groups}
 <h2>Open a replay in 3D</h2>

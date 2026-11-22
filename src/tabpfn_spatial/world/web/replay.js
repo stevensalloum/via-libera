@@ -536,7 +536,8 @@ export function replayPanel(replay) {
   el.id = "replay";
   const updates = rep.updates.map((u) => `<i style="left:${(100 * u.t) / rep.t_end}%"></i>`).join("");
   el.innerHTML = `
-    <div class="rhead"><b>Replay</b> <span>${rep.rung} &middot; leak seed ${rep.seed} &middot; ${rep.physics === "3d" ? "3D gas + 3D models" : "2D gas"}: ${rep.models}</span></div>
+    <div class="rhead brand"><img src="logo.webp" alt="Via Libera"><b>VIA LIBERA</b></div>
+    <div class="rhead"><span>${rep.rung} &middot; leak seed ${rep.seed} &middot; ${rep.physics === "3d" ? "3D gas + 3D models" : "2D gas"}: ${rep.models}</span></div>
     <div class="hint">Click a person to see their three paths live.</div>
     <div class="rrow">
       <button id="r-play">&#9654; Play</button>

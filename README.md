@@ -1,27 +1,80 @@
-# tabpfn-spatial
+<p align="center"><img src="docs/brand/via-libera-logo.webp" alt="Via Libera" width="420"></p>
 
-TabPFN for spatial awareness in robotics. Built at the Berlin AIxRobotics Hackathon
-(Prior Labs track).
+# Via Libera
 
-**Gas-leak emergencies in a factory:** from sparse sensors and the wind, locate the leak,
-predict where it turns toxic or flammable, and route every person out on the safest path.
-See [docs/brief.md](docs/brief.md). Run the whole pipeline: `uv run leak-demo`.
+**Find the leak, predict the gas, route everyone out.** When gas leaks in a factory, today's
+answer is a fixed green sign to the nearest exit, even when that exit is inside the cloud.
+Via Libera reads the gas detectors, locates the leak in 3D, predicts where the gas will be
+harmful, and gives every person their own way out around it, updated as the gas moves.
+Each step is a TabPFN model fitted in seconds on simulations of *that* plant: no training,
+no real leak data needed.
 
-### See it
+Built at the Berlin AIxRobotics Hackathon (Prior Labs track) by Steven, Rayan and Ahmad.
+The Python package is still called `tabpfn_spatial` (the project's working name).
+
+## Results (final 3D test, cloud TabPFN)
+
+Same leaks, same people, 9 plants (5 known layouts, 4 never seen before), 3D gas, alarm from
+noisy detectors, models updated every 15 s ([table](docs/results/final-table.md)):
+
+| | known plants | unseen plants |
+|---|---|---|
+| seconds in harmful gas per person: nearest exit (today) | 0.23 s | 0.84 s |
+| ... Via Libera (CCRP + TabPFN) | **0.14 s** | **0.09 s** |
+| ... with perfect knowledge of the gas | 0.14 s | 0.01 s |
+| people exposed: nearest exit / Via Libera | 3.7 % / 2.3 % | 6.2 % / 2.4 % |
+| 95 % of people out: nearest exit / Via Libera | 41 s / 42 s | 43 s / 40 s |
+| leak position / height error (median) | 1.1 m / 0.95 m | 0.6 m / 0.58 m |
+
+On real gas measurements TabPFN locates the leak better than a classic k-NN on the same rows
+(Red:Vapor 0.38 m vs 0.64 m; SRGDM 0.83 vs 1.50 cells) and ranks hot zones at least as well
+(AUC 0.88 / 0.62 / 0.98 vs 0.88 / 0.60 / 0.94 on Red:Vapor, Örebro, UCI).
+Figures: [docs/figures/final](docs/figures/final).
+
+## Demo (for the presentation)
+
+```bash
+uv sync                                                   # once
+uv run world --replay --rung T --leak 500 --backend cloud # the 3D demo (about 1M tokens)
+uv run world --keep                                       # replay the last run again, free
+uv run world --replay --rung T --leak 500 --backend baseline  # offline, no tokens
+uv run evac-pipeline --models team --backend baseline     # the 2D view: one person, live
+uv run gallery Final                                      # every figure + video, in pitch order
+uv run evac-compare                                       # redraw the "why TabPFN" figures
+```
+
+In the 3D viewer (http://127.0.0.1:8770):
+- **Play**, speed, and which crowd to show (nearest exit, CCRP planned once / replanned live);
+- **click a person**: their three paths drawn live (green replanned, orange planned once, red
+  nearest exit), seconds in gas, and the gas they breathe over time;
+- **Follow** (camera behind them) or **Person view** (through their eyes, green route ahead);
+- **cinematic camera** + **Record video** (saved into the run's `videos/` folder);
+- the map (bottom right): toxic gas, predicted danger, leak guesses, alarming detectors,
+  people, the selected person's paths; click it to fly there;
+- **Walk inside**: W/S walk, A/D step aside, Q/E or the arrows turn, Shift runs.
+
+Reproduce the final results (cloud credits: about 1M tokens per plant and leak):
+
+```bash
+uv run evac-final --backend cloud --leaks 1 --unseen 1 --n-train 100   # 9 plants
+uv run evac-final --backend baseline --leaks 1 --unseen 1 --n-train 100  # k-NN, offline
+uv run evac-final --backend cloud --stress --leaks 1 --unseen 1 --n-train 100  # hard case
+uv run evac-compare                                       # figures -> docs/figures/final
+```
+
+### More views
 
 | Command | What it shows |
 |---|---|
-| `uv run world` | The 3D factory in the browser: orbit, fly to machines, walk inside (http://127.0.0.1:8770) |
-| `uv run world --layout L-plant` | A shaped plant (`L-plant`, `U-plant`, `T-plant`, `campus`), or an unseen random one: `--layout U --seed 7` |
-| `uv run world --replay --rung U` | One emergency on a shaped plant (rungs L, U, T, K): AGVs stop at the alarm and block, height zone around the leak |
+| `uv run world` | The 3D factory: orbit, fly to machines, walk inside |
+| `uv run world --layout L-plant` | A shaped plant (`L-plant`, `U-plant`, `T-plant`, `campus`), or an unseen one: `--layout U --seed 7` |
 | `uv run sim-viz` | The plant: machines, gas pipes, sensors, exits; gas spreading over time |
 | `uv run evac-live` | One person evacuated live from the detector alarm (click to move them) |
-| `uv run evac-crowd-live --rung B` | A whole crowd, three planners side by side (rungs A-E) |
-| `uv run evac-timing` | Timing study: decision time, replanning rate, model latency |
-| `uv run evac-crowd` | Scenario ladder: crowd planners on plants and crowds of growing size |
+| `uv run evac-crowd-live --rung B` | A whole crowd, three planners side by side |
+| `uv run evac-shapes` | The unseen-shapes study (2D) |
 | `uv run sync-check` | Do the source, hazard and evacuation parts agree on time, space, units? |
 
-The story of how each part evolved, with figures: `docs/journey/`.
+How each part evolved, with figures: `docs/journey/`.
 
 ## Team
 
@@ -35,8 +88,8 @@ Requires Python 3.12+. Recommended: [uv](https://docs.astral.sh/uv/) (it install
 itself if missing). Clone outside iCloud / OneDrive folders.
 
 ```bash
-gh repo clone stevensalloum/tabpfn-spatial
-cd tabpfn-spatial
+gh repo clone stevensalloum/via-libera
+cd via-libera
 uv sync                       # creates .venv from uv.lock
 uv run pytest                 # expect all tests to pass
 cp .env.example .env          # Windows: copy .env.example .env ; fill in keys, never commit
@@ -103,15 +156,13 @@ Local TabPFN (PyTorch, GPU if available, multi-GB download): `uv sync --extra lo
    with `--title` and `--body`; do not use `--fill`, which drops the template.
 5. After Steven merges: `git switch main && git pull && git branch -d <branch>`
 
-## How to run
+## Checks
 
 ```bash
 uv run pytest                 # tests
 uv run ruff check .           # lint
 uv run ruff format .          # format
 ```
-
-Entry points for the demo will be added here.
 
 ## Dependencies
 
@@ -128,18 +179,24 @@ CI fails if `requirements.txt` is out of sync with `uv.lock`.
 
 ```
 src/tabpfn_spatial/
-  contracts.py  interfaces between the areas
-  pipeline.py   end to end: leak -> source -> hazard -> evacuation, scored on truth
-  sim/          factory layout and gas-dispersion simulator        (Steven)
-  source/       leak source detection                             (Rayan)
-  hazard/       toxic / fire hazard prediction                    (Ahmad)
-  evac/         evacuation planning                               (Steven)
-  core/         TabPFN backends, distributions, grids, metrics, budget guard
-tests/          mirrors src/ (fast, runs in CI on every PR)
+  sim/          the plants (2D grid + 3D: plant3d, gas3d), gas physics, scenarios  (Steven)
+  source/       find the leak: position, size, height (TabPFN)                     (Rayan)
+  hazard/       predict the gas: toxic / fire probability, 2D and 3D (TabPFN)      (Ahmad)
+  evac/         route everyone: crowd, planners (nearest, risk, CCRP), the loop,
+                final 3D study (final_study, final_compare)                        (Steven)
+  study3d/      real data vs simulation, physics ladder up to CFD (3D study)
+  world/        the 3D viewer (Three.js) and its server
+  core/         TabPFN backends (cloud / k-NN stand-in), budget guard, metrics
+  contracts.py  the interfaces between the three steps
+tests/          mirrors src/ (runs in CI on every PR)
 docs/
-  brief.md       project brief, tasks, targets, milestones
-  decisions.md   design decisions log
-  status/        per-person status files
+  brand/        the Via Libera logo
+  results/      final tables (the numbers behind the pitch)
+  figures/      final/ (pitch figures) · shapes/ · 3d-study/ · steven/ · rayan/ · ahmad/
+  research/     final-factory.md (3D inputs), unseen-shapes.md, 3D study notes
+  journey/      how each part evolved;  status/  per-person status
+outputs/        (git-ignored) runs: final/, world/ (replays + videos), pipeline/ (2D)
+milestones/     (git-ignored) galleries from `uv run gallery <name>`
 ```
 
 Contribution rules (branches, PRs, ownership, code style) are in [AGENTS.md](AGENTS.md).
