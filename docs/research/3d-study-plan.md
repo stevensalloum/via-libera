@@ -260,3 +260,55 @@ Common words:
   - wind is an input CSV (cell centres, u v w): any flow solver can produce it, not only
     OpenFOAM.
 - **Dataset overview figures** in `docs/figures/3d-study/`; findings in the section above.
+
+### 2026-11-22, session 2 (continued): physics ladder results
+
+**Red:Vapor data, refined:**
+- Per-voxel turbulence and intermittency extracted from the 10 Hz series
+  (`voxel_stats.npz`, 1 MB; the 2 GB raw files deleted). Measured at 1.4 m/s:
+  sigma_u ~ 0.13 m/s (9 % intensity), sigma_w ~ 0.06 m/s; the wind grows from 0.93 m/s at
+  0.02 m to 1.6 m/s at 1 m (a boundary layer).
+- **Background:** the closed tunnel fills with fog (upstream sensor 0 -> 1-2 ppm-rel over a
+  run, as large as the plume signal), and the raster is sequential, so each voxel needs
+  the background *at its own time*. Method: the 10th percentile of all readings within
+  +-450 s (the raster sweeps mostly clean air). Check: correlation 0.88-1.00 with the
+  independent upstream sensor; upwind voxels then read ~0 excess.
+
+**Ladder implementation (`src/tabpfn_spatial/study3d/`):**
+- STL voxelised at 4 cm (0 of 16,000 measured points inside a building);
+- L1 Gaussian plume (Taylor spread, Hanna 1982 time scale);
+- L2 finite volumes around buildings (advective form; unadjusted wind);
+- L3 mass-consistent wind (Sherman 1978) + L2 transport;
+- flow and turbulence from each experiment's upwind measurements;
+- tests against conservation laws (plume flux = release; duct outflow = release;
+  divergence-free L3 wind goes round and over a block).
+
+**Bugs found and fixed on the way:** the leak hole (z = 0.18 m, on top of the 0.18 m tank)
+voxelised into a solid cell, which silently put the release in the last fluid cell
+(negative correlations); now the release goes to the first air cell above and a solid
+source raises an error. A 1-cell sealed pocket in setup A made the system singular; sealed
+pockets are filled.
+
+**Results, Red:Vapor (scale-free scores; AUC = finding the real hottest 10 %):**
+- All levels find where the gas is: AUC 0.71-0.96.
+- **Height:** with obstacles (setups C, D), L2/L3 get the vertical profile better than the
+  plume (profile r 0.81-0.98 vs 0.49-0.87): buildings matter for height.
+- **Spread:** with the *measured* turbulence every level is far too narrow (crosswind
+  spread 0.1-0.5 of the real one). Real plumes need about 4-8x the measured sigmas. Why:
+  each voxel's sigma comes from a 5 s dwell, which cannot see slower meandering, and the
+  closed tunnel recirculates fog. **Measured local turbulence explains only 1/8-1/4 of
+  the spread: any simulator (GADEN included) must be calibrated on spread.**
+- Calibration is done fairly: per held-out setup, the factor (1, 4, 8) that scores best on
+  the other setups.
+
+**Results, UCI (1D check):** every level finds the hot centre board (AUC 0.97-1.00).
+L1 is too narrow (spread 0.4x); L2/L3 too wide (1.3-1.6x: numerical diffusion of the
+first-order scheme at 2.5 cm and 0.1-0.3 m/s).
+
+**Results, Örebro (room):** **every level fails** (AUC 0.32-0.86, mostly near chance;
+inverted vertical profile for the floor source, exp 3). The room is governed by its HVAC
+flow, whose inlet and outlet positions are not published, so no simulator can be set up
+faithfully. Limit of the data, reported as such.
+
+**Tools ready for L4:** GADEN core (native) + driver; OpenFOAM 2406 image (1.9 GB) in
+Colima.
