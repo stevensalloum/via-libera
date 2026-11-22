@@ -202,6 +202,17 @@ class TabPFNVolumePredictor:
         x, y = training_rows_3d(
             grid, source_candidates, n_scenarios, cells_per_scenario, times, seed, diffusivity_range
         )
+        return self.fit_examples(grid, x, y)
+
+    def fit_examples(
+        self, grid: VolumeGrid, features: np.ndarray, concentrations: np.ndarray
+    ) -> "TabPFNVolumePredictor":
+        """Fit from labelled nine-feature rows, for example from Steven's 3D simulator."""
+        x, y = np.asarray(features, float), np.asarray(concentrations, float)
+        if (x.ndim != 2 or x.shape[1] != 9 or not len(x) or y.shape != (len(x),)
+                or not np.isfinite(x).all() or not np.isfinite(y).all()
+                or np.any(y < 0)):  # fmt: skip
+            raise ValueError("training requires finite nine-feature rows and concentrations")
         self.model = make_regressor(self.backend).fit(x, y)
         self._training_grid = VolumeGrid(grid.solid, grid.ignition, grid.cell, grid.dz)
         return self

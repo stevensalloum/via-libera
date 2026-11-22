@@ -113,3 +113,22 @@ uv run python tests/hazard/plot_volume3d.py --figure docs/figures/ahmad/08-hazar
 
 Inputs, assumptions and reproduction are in
 [`VOLUME3D.md`](../../src/tabpfn_spatial/hazard/VOLUME3D.md).
+
+### 2026-11-22: First shared 3D source-to-hazard smoke check
+
+Connected the experimental hazard prototype to Steven's plant geometry and
+simulated training concentrations, plus the source map and height quantiles from
+Rayan's work. A mast detector triggered before the original mounted detectors;
+the old horizontal locator returned its prior at that instant. Source PR #53
+adds a locator trained on all 3D detectors. The hazard adapter combines the
+separate position and height distributions assuming independence and reports
+how much probability the model retains.
+
+One held-out propane case, context seeds 100/111/222, eight training leaks per
+model, alarm 5 s, forecast 10 s, top one source (43.38% mass): forward / cloud
+toxic Brier 0.02070 / 0.00728; recall at 0.5 0.49% / 43.69%; hazard call
+0.046 / 4.90 s. Hazard cloud calls quoted 20,000 credits; source calls additional.
+The forward model has different physics and scaling, and one case cannot validate
+accuracy. The cloud model missed over half of the toxic voxels and exceeded the
+2 s budget before source and routing calls. No new presentation figure: one smoke
+case is not representative. Reproduce and see limits in `hazard/VOLUME3D.md`.

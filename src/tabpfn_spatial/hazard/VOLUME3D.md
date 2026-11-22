@@ -2,11 +2,61 @@
 
 The existing 2D predictor remains available and unchanged. This prototype accepts
 explicit 3D source hypotheses and returns separate toxic and fire probability
-volumes. It is **not connected to Rayan's future 3D locator or Steven's planner**:
-their shared production contracts currently describe 2D source/hazard maps, and
-the team has not agreed on a 3D handover. No source height is inferred from a 2D
-map. Rayan's future output must supply real height information before that
-integration is built and validated.
+volumes. A separate experimental adapter now connects Steven's `Plant3D` and
+Rayan's location and height estimates for an opt-in smoke check. It is **not wired
+into the live pipeline or Steven's planner**. Rayan's height model is in PR #50
+and the 3D horizontal locator is in PR #53. No height is invented from a 2D map.
+
+## Shared simulator and source handover
+
+`plant3d_adapter.plant_grid` takes the exact solid-voxel geometry from Steven's
+plant, converts it to `(z, y, x)` and marks open voxels within a caller-selected
+distance of hot machine boxes. This radius is a modelling assumption.
+`plant_training_rows` samples weighted 3D pipe leak sites, wind, rate and mixing,
+then takes the training concentrations from Steven's time-stepped 3D simulator.
+`TabPFNVolumePredictor.fit_examples` accepts those rows. Fit on each plant before
+an emergency; this is still context preparation, not retraining TabPFN weights.
+
+`source_hypotheses` combines the 2D location map with the height quantiles. The
+contract supplies separate distributions, so this **assumes horizontal location
+and height are independent**; it cannot recover their joint uncertainty. It bins
+the quantiles, removes combinations outside the plant or inside solids, reports
+the retained mass, then renormalises. The Cartesian combinations are not checked
+against the 3D pipe network and may include heights impossible for a given pipe.
+`last_retained_mass` additionally records how much of the resulting distribution
+the predictor keeps after its top-k selection. Rate is supplied separately; the
+smoke check uses Rayan's median rate quantile. Both approximations need further
+work before relying on the map for routing.
+
+### First integrated smoke check
+
+One held-out propane leak on the default plant, source `(11, 15, 3.06)` m,
+rate 1.0, sensor-noise seed 899. Source/height/hazard contexts each used **eight**
+training leaks, seeds 100/111/222 respectively. Hazard context: 3,200 rows,
+mixing 0.4–1.6. The alarm fired at 5 s from a mast sensor, and the single
+forecast was for 10 s. Location and height were both estimated from readings;
+the test did not provide the true leak position to the predictors. Only the
+highest-weight 3D source was used, retaining 43.38% of the adapted distribution.
+
+| At toxic cutoff 0.1 and warning probability 0.5 | Forward prototype | Cloud TabPFN |
+| --- | ---: | ---: |
+| Toxic Brier, lower is better | 0.02070 | 0.00728 |
+| Toxic recall | 0.49% (2/412) | 43.69% (180/412) |
+| Hazard call time | 0.046 s | 4.90 s |
+
+The forward prototype uses different, simpler transport and relative units than
+Steven's simulator, so this is a functionality baseline, not a controlled physics
+comparison. The hazard cloud calls quoted 20,000 credits; source and height calls
+were additional. The timings exclude fitting and both source calls. One leak and
+tiny contexts cannot demonstrate safety or a general accuracy ranking: in this
+case TabPFN missed more than half the toxic voxels at the stated warning cutoff,
+and its hazard call alone exceeded the team's approximately 2 s route budget.
+The 2D experiment's 0.19 cutoff has not been calibrated for this 3D model.
+
+After PRs #50 and #53 are available in the checkout, reproduce the offline or
+cloud smoke check with `uv run python tests/hazard/smoke_integrated_3d.py` or
+`uv run python tests/hazard/smoke_integrated_3d.py --backend cloud`. The cloud
+command spends credits. Neither command performs a route-safety test.
 
 ## What goes in and comes out
 

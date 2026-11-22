@@ -4,6 +4,10 @@ Only Ahmad's agent edits this file. Update it before every PR.
 
 ## Doing
 
+- Integrate the 3D prototype with Steven's `Plant3D` and the source-height work
+  in PRs #50 and #53. One cloud smoke case completes from the first mast alarm;
+  the live planner is not yet connected and the source/height combination assumes
+  independence. See `hazard/VOLUME3D.md` for the reproducible check and limits.
 - Prototype a 3D hazard interface for explicit `(x, y, z)` sources and machine
   geometry. Waiting for Rayan's actual 3D source format and Steven's 3D layout /
   planner contract before connecting it to the integrated application.
@@ -19,6 +23,20 @@ Only Ahmad's agent edits this file. Update it before every PR.
 
 ## Done
 
+- One paired 3D propane smoke case, evaluation sensor seed 899, source/height/
+  hazard training seeds 100/111/222, 8 simulated leaks each, hazard 3,200 rows,
+  forecast 10 s, alarm 5 s, top 1 of adapted 3D sources (43.38% retained).
+  Forward prototype / cloud TabPFN toxic Brier 0.02070 / 0.00728, recall at 0.5
+  0.49% (2/412) / 43.69% (180/412), hazard call 0.046 / 4.90 s. Hazard cloud
+  calls quoted 20,000 credits vs 0; source and height calls additional. Forward
+  uses different simulator physics and scaling; a single leak and tiny contexts
+  establish functionality only, not safety, reliability or a general ranking.
+- Added an adapter for the shared 3D solids, hot machine boxes, height quantiles,
+  and 3D-simulator concentration rows. The source-side 3D detector fix is a
+  separate PR #53 based on #50. No integrated 3D evacuation run is claimed.
+- Existing 2D `sync-check --hazard tabpfn_spatial.hazard:TabPFNHazardPredictor`,
+  offline backend: 24/24 checks pass; default centroid-source warnings are less
+  than 99% mass on pipes and no estimated rate. This does not check the 3D API.
 - Experimental transient 3D hazard volume and forward baseline: explicit 3D
   source hypotheses, voxel walls, axis-aligned 3D machines and hot zones; output
   axes `(time, z, y, x)`. Small paired cloud benchmark, one synthetic layout,
