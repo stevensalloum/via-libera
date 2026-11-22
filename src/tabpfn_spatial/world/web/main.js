@@ -296,12 +296,13 @@ renderer.domElement.addEventListener("pointerup", (e) => {
 });
 
 // Scripted recording (used to make the milestone videos): plays from the start and saves.
-window.__record = async ({ name, planner = "ccrp", speed = 3, cine = true, person = null } = {}) => {
+window.__record = async ({ name, planner = "ccrp", speed = 3, cine = true, person = null, pview = false } = {}) => {
   if (!replay) return null;
   replay.planner = planner;
   replay.speed = speed;
   replay.cinematic = cine;
-  if (person !== null) { replay.select(person); replay.follow = true; }
+  replay.select(person);
+  if (person !== null) { replay.follow = true; replay.personView = pview; }
   return recordVideo(replay, null, name);
 };
 window.__world = { scene, nav, camera, parts, replay };  // for debugging in the console
