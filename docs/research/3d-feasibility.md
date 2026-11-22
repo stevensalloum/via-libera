@@ -1,6 +1,9 @@
 # Feasibility study: going 3D with real data and GADEN
 
-Steven, 2026-11-22. Status: **for discussion, nothing built yet.**
+Steven, 2026-11-22. Status: **superseded by the study's results:
+[`3d-two-workflows.md`](3d-two-workflows.md)** (both workflows, every dataset, physics up to
+OpenFOAM + GADEN). This page is kept as the starting proposal. "SRGDN" turned out to be
+SRGDM (Winkler et al. 2024), now part of the study.
 
 The question: can we use real gas datasets and the GADEN 3D simulator so that the three
 parts work in 3D?
@@ -25,8 +28,7 @@ The goal is physical realism, so the bar is "does it hold up", not "does it run"
 | Time | 100 Hz, 260 s, 18,000 runs | 10 Hz; 8 rasterised runs (~2 h each), 22 "fly-through" runs, 9 purge runs | 2 Hz, 10 experiment logs | ~1000 s per case |
 | Size, licence | 7.8 GB, CC BY 4.0 (research use) | **voxel_maps.pkl 9 MB**, experiments.pkl 1.3 GB, CSV 0.8 GB; CC BY 4.0 | 10 CSV logs, ~33 MB total; GPL-3.0 | 48.6 GB; CC BY 4.0 |
 
-"SRGDN": I could not find a dataset with this name. Did you mean VGR (GADEN-simulated)
-or Örebro 3DSEN? Tell me where you saw it.
+"SRGDN" was SRGDM (Winkler et al. 2024, BAMresearch/SRGDM), found later and used in the study.
 
 ### What each one is good for
 
