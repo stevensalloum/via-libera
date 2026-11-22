@@ -130,8 +130,13 @@
 
   <section id="tabpfn" class="chapter" data-title="6 · Why TabPFN">
     <p class="kicker">6 · Why TabPFN</p>
-    <h2>Accurate on real gas, no training, and the physics behind it is cheap.</h2>
+    <h2>Finds the leak 3.5× closer, no training, and the physics behind it is cheap.</h2>
+    <p>Same plants, same leaks, a classic k-NN in TabPFN's place: TabPFN puts the leak at 0.63 m
+      (k-NN 2.20 m) and its height at 0.63 m (k-NN 1.63 m). Its hazard map raises no false alarms
+      but covers less of the harmful air than k-NN's broader map (26 % vs 76 %): widening it is
+      our next step.</p>
     <div class="meters">
+      <div class="meter"><b data-count="3.5" data-dec="1" data-unit="×">0</b><span>closer to the leak than k-NN in the 3D factory</span></div>
       <div class="meter"><b data-count="41" data-unit=" %">0</b><span>smaller leak error than k-NN on real data (0.38 vs 0.64 m)</span></div>
       <div class="meter"><b data-count="0" data-unit=" s">0</b><span>training: it reads the table in context</span></div>
       <div class="meter"><b data-count="8" data-unit=" min">0</b><span>to simulate a new plant (CFD: 5.2 h)</span></div>

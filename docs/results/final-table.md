@@ -28,7 +28,7 @@ unseen: locator 0.6 m (first 0.1 m), height 0.58 m, hazard Brier 0.053, recall 0
 
 ## k-NN comparison (same plants and leaks, `--backend baseline`)
 
-_pending_
+see the README "Results" section and docs/figures/final/2-accuracy-factory.png
 
 ## Hard case (`--stress`: low leaks near people, 2x rate, updates every 5 s)
 
@@ -43,3 +43,25 @@ leak error 0.6 m (0.2 m at the alarm), height 0.55 m, alarm at 5 s.
 **All 15 plants** (5 known + 10 unseen, one leak each, plant means weighted equally):
 0.50 s -> 0.09 s per person (-83 %); unseen only 0.63 s -> 0.06 s (-90 %); exposed 5.0 % ->
 1.8 % (-64 %).
+
+```
+split   models   policy    s in gas  % exposed  95% out s
+known   tabpfn   nearest       0.23        3.7         41
+known   tabpfn   risk          0.19        3.2         55
+known   tabpfn   ccrp          0.21        3.4         49
+known   tabpfn   once          0.21        3.4         48
+known   perfect  nearest       0.23        3.7         41
+known   perfect  risk          0.15        2.4         49
+known   perfect  ccrp          0.14        2.3         42
+known   perfect  once          0.14        2.3         40
+unseen  tabpfn   nearest       0.84        6.2         43
+unseen  tabpfn   risk          0.02        0.4         53
+unseen  tabpfn   ccrp          0.02        0.4         46
+unseen  tabpfn   once          0.02        0.4         46
+unseen  perfect  nearest       0.84        6.2         43
+unseen  perfect  risk          0.01        0.1         46
+unseen  perfect  ccrp          0.01        0.1         45
+unseen  perfect  once          0.01        0.1         42
+known: locator 1.4 m (first 1.2 m), height 1.35 m, hazard Brier 0.072, recall 0.32 (at P>=0.2: 0.76), false alarms 0.012, alarm 5 s
+unseen: locator 2.3 m (first 1.1 m), height 2.05 m, hazard Brier 0.036, recall 0.83 (at P>=0.2: 0.98), false alarms 0.026, alarm 5 s
+```

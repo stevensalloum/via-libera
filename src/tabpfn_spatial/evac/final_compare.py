@@ -114,8 +114,9 @@ def accuracy_factory(cloud: list[dict], knn: list[dict], out: Path) -> Path:
                             "pending: evac-final --backend baseline")  # fmt: skip
     measures = (("loc_err_median_m", "leak position error (m)", "lower is better"),
                 ("height_err_m", "leak height error (m)", "lower is better"),
-                ("hz_recall", "harmful cells caught (recall)", "higher is better"))  # fmt: skip
-    fig, axes = plt.subplots(1, 3, figsize=(12, 3.8))
+                ("hz_recall", "harmful cells caught (recall)", "higher is better"),
+                ("hz_false", "safe cells flagged (false alarms)", "lower is better"))  # fmt: skip
+    fig, axes = plt.subplots(1, 4, figsize=(15, 3.8))
     for ax, (key, title, better) in zip(axes, measures, strict=True):
         for j, (rows, col) in enumerate(((b, KNN), (a, TABPFN))):
             v = [rows[p].get(key) for p in plants]
@@ -125,7 +126,8 @@ def accuracy_factory(cloud: list[dict], knn: list[dict], out: Path) -> Path:
             if v:
                 m = float(np.median(v))
                 ax.hlines(m, j - 0.3, j + 0.3, color=INK, lw=2)
-                ax.text(j + 0.33, m, f"{m:.2f}", va="center", fontsize=9, color=INK)
+                ax.text(j + 0.33, m, f"{m:.3f}" if m < 0.1 else f"{m:.2f}", va="center", fontsize=9,
+                        color=INK)  # fmt: skip
         ax.set_xticks([0, 1], ["k-NN", "TabPFN"])
         ax.set_xlim(-0.6, 1.8)
         ax.set_title(f"{title}\n{better}", color=INK, fontsize=10)

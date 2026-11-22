@@ -30,6 +30,12 @@ With Rayan's 6 further unseen plants (15 plants, 10 never seen, one leak each): 
 per person 0.50 s → **0.09 s (−83 %)**, on unseen plants 0.63 s → **0.06 s (−90 %)**, people
 exposed 5.0 % → **1.8 % (−64 %)**, as good as perfect knowledge of the gas.
 
+Against a classic k-NN in TabPFN's place (same 9 plants and leaks, `--backend baseline`):
+TabPFN locates the leak 3.5x closer (median 0.63 m vs 2.20 m; height 0.63 m vs 1.63 m). The
+k-NN hazard map is broader (catches 76 % of harmful cells vs 26 %, with more false alarms),
+which helps routing on unseen plants (0.02 s vs 0.09 s in gas per person; known plants: TabPFN
+0.14 s vs k-NN 0.21 s). Widening TabPFN's hazard map is the next step.
+
 On real gas measurements TabPFN locates the leak better than a classic k-NN on the same rows
 (Red:Vapor 0.38 m vs 0.64 m; SRGDM 0.83 vs 1.50 cells) and ranks hot zones at least as well
 (AUC 0.88 / 0.62 / 0.98 vs 0.88 / 0.60 / 0.94 on Red:Vapor, Örebro, UCI).
