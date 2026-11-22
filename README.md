@@ -26,6 +26,16 @@ noisy detectors, models updated every 15 s ([table](docs/results/final-table.md)
 | 95 % of people out: nearest exit / Via Libera | 41 s / 42 s | 43 s / 40 s |
 | leak position / height error (median) | 1.1 m / 0.95 m | 0.6 m / 0.58 m |
 
+With Rayan's 6 further unseen plants (15 plants, 10 never seen, one leak each): seconds in gas
+per person 0.50 s → **0.09 s (−83 %)**, on unseen plants 0.63 s → **0.06 s (−90 %)**, people
+exposed 5.0 % → **1.8 % (−64 %)**, as good as perfect knowledge of the gas.
+
+Against a classic k-NN in TabPFN's place (same 9 plants and leaks, `--backend baseline`):
+TabPFN locates the leak 3.5x closer (median 0.63 m vs 2.20 m; height 0.63 m vs 1.63 m). The
+k-NN hazard map is broader (catches 76 % of harmful cells vs 26 %, with more false alarms),
+which helps routing on unseen plants (0.02 s vs 0.09 s in gas per person; known plants: TabPFN
+0.14 s vs k-NN 0.21 s). Widening TabPFN's hazard map is the next step.
+
 On real gas measurements TabPFN locates the leak better than a classic k-NN on the same rows
 (Red:Vapor 0.38 m vs 0.64 m; SRGDM 0.83 vs 1.50 cells) and ranks hot zones at least as well
 (AUC 0.88 / 0.62 / 0.98 vs 0.88 / 0.60 / 0.94 on Red:Vapor, Örebro, UCI).
@@ -33,9 +43,19 @@ Figures: [docs/figures/final](docs/figures/final).
 
 ## Demo (for the presentation)
 
+**One command, nothing computed, no tokens:**
+
+```bash
+uv run via-libera              # the story page + live map, "Enter the factory" for 3D (saved cloud run)
+```
+
+The viewer loads Three.js from a CDN: have internet (or a phone hotspot) on the demo laptop.
+Other commands:
+
 ```bash
 uv sync                                                   # once
-uv run world --replay --rung T --leak 500 --backend cloud # the 3D demo (about 1M tokens)
+uv run via-libera --list                                  # saved demo runs (demo/)
+uv run world --replay --rung T --leak 500 --backend cloud # a new 3D run (about 1M tokens)
 uv run world --keep                                       # replay the last run again, free
 uv run world --replay --rung T --leak 500 --backend baseline  # offline, no tokens
 uv run evac-pipeline --models team --backend baseline     # the 2D view: one person, live
@@ -61,6 +81,8 @@ uv run evac-final --backend baseline --leaks 1 --unseen 1 --n-train 100  # k-NN,
 uv run evac-final --backend cloud --stress --leaks 1 --unseen 1 --n-train 100  # hard case
 uv run evac-compare                                       # figures -> docs/figures/final
 ```
+
+Full presentation guide (pitch timing, shot list, backups): [docs/presentation.md](docs/presentation.md).
 
 ### More views
 

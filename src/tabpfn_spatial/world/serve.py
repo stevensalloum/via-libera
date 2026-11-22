@@ -19,6 +19,7 @@ from tabpfn_spatial.sim import Factory
 from tabpfn_spatial.world.export import scene
 
 WEB = Path(__file__).parent / "web"
+FIGURES = Path(__file__).resolve().parents[3] / "docs" / "figures"
 
 
 def clean(obj):
@@ -59,6 +60,8 @@ class _Handler(SimpleHTTPRequestHandler):
     def translate_path(self, path: str) -> str:
         if path.split("?")[0].startswith("/data/"):
             return str(self.data / path.split("?")[0][len("/data/") :])
+        if path.split("?")[0].startswith("/figures/"):  # the study figures, for the story page
+            return str(FIGURES / path.split("?")[0][len("/figures/") :])
         return super().translate_path(path)
 
     def do_POST(self) -> None:
@@ -208,3 +211,30 @@ def main() -> int:
     with contextlib.suppress(KeyboardInterrupt):
         server.serve_forever()
     return 0
+
+
+DEMO = Path(__file__).resolve().parents[3] / "demo"  # saved replays shipped with the repo
+
+
+def demo() -> int:
+    """CLI: ``uv run via-libera [name]``: the presentation in one command.
+
+    Serves a replay saved in ``demo/`` (default: the newest), so nothing is computed and no
+    tokens are spent; opens the browser. ``uv run via-libera --list`` lists them.
+    """
+    import sys
+
+    runs = sorted((d for d in DEMO.glob("*") if (d / "replay.json").exists()),
+                  key=lambda d: (d / "replay.json").stat().st_mtime)  # fmt: skip
+    args = sys.argv[1:]
+    if not runs:
+        print(f"no saved replay in {DEMO}; make one: uv run world --replay --rung T")
+        return 1
+    if args and args[0] == "--list":
+        print("\n".join(d.name for d in runs))
+        return 0
+    pick = next((d for d in runs if args and d.name == args[0]), runs[-1])
+    extra = [a for a in args if a != pick.name]
+    sys.argv = ["world", "--keep", "--out", str(pick), *extra]
+    print(f"Via Libera demo: {pick.name}")
+    return main()

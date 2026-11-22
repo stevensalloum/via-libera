@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Via Libera</title>
+  <link rel="icon" href="logo.webp" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+  <style>
+    :root { --panel: rgba(11, 24, 38, 0.9); --line: #22405c; --text: #e6eef5; --muted: #8ba3b8;
+      --accent: #f39200; --cyan: #3fc1e8; --navy: #0b1622; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--navy);
+      font: 13px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--text); }
+    #app, #app canvas { position: fixed; inset: 0; }
+    .labels { position: fixed; inset: 0; pointer-events: none; }
+    .label { padding: 2px 7px; border-radius: 4px; background: rgba(15, 18, 22, 0.72); color: #fff;
+      font-size: 12px; white-space: nowrap; }
+    .label.hot { background: rgba(160, 50, 0, 0.82); }
+    .label.exit { background: rgba(15, 130, 60, 0.88); font-weight: 600; }
+    .label.sensor { background: rgba(20, 90, 170, 0.75); font-size: 10px; padding: 1px 4px; }
+    .label.zone { background: rgba(20, 60, 140, 0.9); font-weight: 700; font-size: 12px; }
+    #panel { position: fixed; top: 12px; right: 12px; width: 270px; background: var(--panel);
+      border-radius: 10px; padding: 12px 14px; backdrop-filter: blur(6px); }
+    #panel h1 { font-size: 15px; margin: 0 0 2px; color: var(--accent); letter-spacing: 0.3px; }
+    #panel .sub { color: var(--muted); font-size: 11.5px; margin-bottom: 10px; }
+    #panel h2 { font-size: 11px; text-transform: uppercase; color: var(--muted); margin: 12px 0 6px;
+      letter-spacing: 0.6px; }
+    .row { display: flex; gap: 6px; flex-wrap: wrap; }
+    #panel, #replay, #minilegend { border: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 8px; }
+    .brand img { height: 26px; background: #fff; border-radius: 5px; padding: 2px 5px; }
+    #replay .rhead b { color: var(--accent); font-size: 14px; letter-spacing: 0.4px; }
+    button, select { background: #132a3e; color: var(--text); border: 1px solid #24435e; border-radius: 6px;
+      padding: 5px 9px; font: inherit; cursor: pointer; }
+    button:hover, select:hover { border-color: var(--accent); }
+    button.primary { background: linear-gradient(90deg, #d96b00, #f39200); border-color: #f39200; color: #fff; }
+    select { width: 100%; }
+    label.chk { display: flex; align-items: center; gap: 6px; margin: 3px 0; cursor: pointer; }
+    #minimap { position: fixed; right: 12px; bottom: 12px; border-radius: 6px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); cursor: crosshair; }
+    #walkhelp, #resume { position: fixed; left: 50%; top: 16px; transform: translateX(-50%);
+      background: var(--panel); padding: 8px 14px; border-radius: 8px; }
+    #crosshair { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px;
+      border-radius: 50%; background: rgba(255, 255, 255, 0.8); pointer-events: none; }
+    #loading { position: fixed; inset: 0; display: grid; place-items: center; background: var(--navy);
+      color: var(--accent); font-size: 16px; }
+    #replay { position: fixed; left: 12px; top: 12px; bottom: 12px; width: 350px; overflow-y: auto;
+      background: var(--panel); border-radius: 10px; padding: 10px 12px; backdrop-filter: blur(6px); }
+    #replay .hint { color: var(--muted); font-size: 11px; }
+    #replay #r-text { margin: 4px 0; }
+    #panel.collapsed > :not(h1):not(#back) { display: none; }
+    #panel h1 { cursor: pointer; }
+    #panel h1::after { content: " \25BE"; color: var(--muted); font-size: 11px; }
+    #panel.collapsed h1::after { content: " \25B8"; }
+    #minilegend { position: fixed; right: 12px; font-size: 10.5px; background: var(--panel); padding: 3px 8px;
+      border-radius: 6px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    #minilegend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 3px; vertical-align: -1px; }
+    #replay .rhead span { color: var(--muted); font-size: 11.5px; }
+    #replay select { width: auto; }
+    #replay .rrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+    #replay .rtrack { position: relative; }
+    #replay .rcharts { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-top: 6px; }
+    #replay .rcharts { flex-direction: column; align-items: stretch; }
+    #replay canvas { background: rgba(0, 0, 0, 0.25); border-radius: 6px; width: 100%; height: auto; }
+    #replay #r-person { margin-top: 6px; font-size: 12px; }
+    #replay #r-person button { padding: 2px 8px; font-size: 11px; }
+    #replay #r-legend { font-size: 11px; display: flex; flex-direction: column; gap: 2px; }
+    #replay input[type=range] { width: 100%; accent-color: var(--accent); }
+    #replay .ticks { position: relative; height: 8px; }
+    #replay .ticks i { position: absolute; width: 2px; height: 8px; background: #19e3ff; }
+    #replay .ticks b { position: absolute; width: 3px; height: 10px; background: #ff3b30; top: -1px; }
+    #r-text { font-size: 12px; color: var(--text); }
+    #r-text .alarm { color: #ff5a4f; font-weight: 700; }
+    #r-text .calm { color: var(--muted); }
+    #r-text .ingas { color: #ff6bf0; }
+    @media (max-width: 900px) { #replay { width: auto; right: 12px; top: auto; max-height: 45vh; } }
+    kbd { background: #132a3e; border-radius: 3px; padding: 0 4px; border: 1px solid #24435e; }
+    #replay .ticks i { background: var(--cyan); }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="loading">Building the factory...</div>
+  <div id="panel">
+    <h1>Via Libera &middot; world</h1>
+    <a id="back" href="./" style="font-size:12px">&larr; back to the story</a>
+    <div class="sub" id="info"></div>
+    <h2>Move</h2>
+    <div class="row">
+      <button id="orbit">Orbit</button>
+      <button id="walk" class="primary">Walk inside</button>
+    </div>
+    <h2>Views</h2>
+    <div class="row">
+      <button id="view-overview">Overview <kbd>1</kbd></button>
+      <button id="view-top">Top <kbd>2</kbd></button>
+      <button id="view-inside">Inside</button>
+    </div>
+    <h2>Go to</h2>
+    <select id="goto"><option value="">machine or exit...</option></select>
+    <h2>Layers</h2>
+    <label class="chk"><input type="checkbox" id="show-walls" /> Full-height walls</label>
+    <label class="chk"><input type="checkbox" id="show-frame" checked /> Roof frame and lights</label>
+    <label class="chk"><input type="checkbox" id="show-roof" /> Roof</label>
+    <label class="chk"><input type="checkbox" id="show-people" checked /> Workers</label>
+    <label class="chk"><input type="checkbox" id="show-overhead" checked /> Crane, ducts, sprinklers</label>
+    <label class="chk"><input type="checkbox" id="show-pipes" checked /> Gas pipes</label>
+    <label class="chk"><input type="checkbox" id="show-labels" checked /> Labels</label>
+    <label class="chk"><input type="checkbox" id="show-grid" /> Planner grid (solid cells)</label>
+    <label class="chk"><input type="checkbox" id="high-quality" /> High quality (ambient occlusion)</label>
+    <label class="chk"><input type="checkbox" id="daylight" /> Daylight sky</label>
+  </div>
+  <canvas id="minimap" title="Click to fly there"></canvas>
+  <div id="walkhelp" hidden><kbd>W S</kbd> walk &middot; <kbd>A D</kbd> step aside &middot; <kbd>Q E</kbd> / <kbd>&larr; &rarr;</kbd> turn &middot; <kbd>Shift</kbd> run &middot; mouse look (or drag) &middot;
+    <kbd>O</kbd> back to orbit &middot; walls and machines are solid</div>
+  <button id="resume" hidden>Click to lock the mouse &middot; or drag to look &middot; <kbd>O</kbd> back to orbit</button>
+  <div id="crosshair" hidden></div>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
