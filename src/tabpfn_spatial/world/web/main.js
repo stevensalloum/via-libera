@@ -238,7 +238,8 @@ renderer.setAnimationLoop(() => {
   const dt = Math.min(since, 0.1);
   since = 0;
   frame++;
-  if (replay && replay.cinematic) cinematic(clock.elapsedTime);
+  if (replay && replay.follow && replay.followCamera(camera)) { /* camera follows the person */ }
+  else if (replay && replay.cinematic) cinematic(clock.elapsedTime);
   else nav.update(dt);
   animateMachines(parts.machines, clock.elapsedTime);
   if (!replay) parts.agvs.drive(clock.elapsedTime);
@@ -258,12 +259,26 @@ function cinematic(t) {
   nav.orbit.target.copy(F.P(cx, cy, 0));
 }
 
+// Click a person (orbit mode) to see their routes; a click without dragging only.
+let downAt = null;
+renderer.domElement.addEventListener("pointerdown", (e) => { downAt = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener("pointerup", (e) => {
+  if (!replay || !downAt || nav.mode !== "orbit") return;
+  if (Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4) return;
+  const ndc = new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  const ray = new THREE.Raycaster();
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObject(replay.bodies, false)[0] || ray.intersectObject(replay.heads, false)[0];
+  if (hit && hit.instanceId !== undefined) replay.select(hit.instanceId);
+});
+
 // Scripted recording (used to make the milestone videos): plays from the start and saves.
-window.__record = async ({ name, planner = "ccrp", speed = 3, cine = true } = {}) => {
+window.__record = async ({ name, planner = "ccrp", speed = 3, cine = true, person = null } = {}) => {
   if (!replay) return null;
   replay.planner = planner;
   replay.speed = speed;
   replay.cinematic = cine;
+  if (person !== null) { replay.select(person); replay.follow = true; }
   return recordVideo(replay, null, name);
 };
 window.__world = { scene, nav, camera, parts, replay };  // for debugging in the console

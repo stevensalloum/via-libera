@@ -46,6 +46,7 @@ class CrowdResult:
 
     metrics: dict[str, float]
     frames: list[dict] = field(default_factory=list)
+    routes: list[dict] = field(default_factory=list)  # per replan: {"t", "routes": {i: (m, 2)}}
 
 
 MODELS = ("perfect", "baseline", "tabpfn")
@@ -146,8 +147,12 @@ def run_crowd(
     params: CrowdParams = DEFAULT_PARAMS,
     record_every: int | None = None,
     detour_weight: float = DETOUR_WEIGHT,
+    record_routes: bool = False,
 ) -> CrowdResult:
-    """Evacuate ``positions`` with ``planner``; every planner replans at the same times."""
+    """Evacuate ``positions`` with ``planner``; every planner replans at the same times.
+
+    ``record_routes``: keep every active person's planned route after each replan.
+    """
     if planner not in PLANNERS:
         raise ValueError(f"planner must be one of {PLANNERS}, not {planner!r}")
     crowd = Crowd(f, positions, params)
@@ -157,6 +162,10 @@ def run_crowd(
         if round(float(t)) in replans and crowd.active.any():
             assign(planner, f, crowd, replans[round(float(t))], float(t),
                    detour_weight=detour_weight)  # fmt: skip
+            if record_routes:
+                routes = {int(i): crowd.routes[i].copy() for i in np.flatnonzero(crowd.active)
+                          if crowd.routes[i] is not None}  # fmt: skip
+                out.routes.append({"t": float(t), "routes": routes})
         crowd.expose(prep.fields[k], prep.harm[k])
         if record_every and k % record_every == 0:
             out.frames.append(_snapshot(float(t), k, crowd))

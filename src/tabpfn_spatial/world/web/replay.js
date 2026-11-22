@@ -53,8 +53,14 @@ export class Replay {
     this.tracks = {};
     for (const [p, d] of Object.entries(rep.planners)) {
       const raw = b64(d.cells);
-      this.tracks[p] = { cells: new Int16Array(raw.buffer), state: b64(d.state), metrics: d.metrics };
+      this.tracks[p] = { cells: new Int16Array(raw.buffer), state: b64(d.state), metrics: d.metrics,
+        routes: (d.routes || []).map((u) => ({ t: u.t, people: new Int32Array(b64(u.people).buffer),
+          offsets: new Int32Array(b64(u.offsets).buffer), cells: new Int16Array(b64(u.cells).buffer) })) };
     }
+    this.selected = null;
+    this.follow = false;
+    this.pathGroup = new THREE.Group();
+    world3d.add(this.pathGroup);
     this.buildGas();
     this.buildDanger();
     this.buildMarkers();
@@ -120,6 +126,84 @@ export class Replay {
     const rnd = () => ((k = (k * 16807) % 2147483647) / 2147483647);
     this.jitter = Array.from({ length: n }, () => [(rnd() - 0.5) * 1.3, (rnd() - 0.5) * 1.3]);
     this.colours = STATE_COLOURS.map((h) => new THREE.Color(h));
+  }
+
+  // Planned route of person i at update u of planner p (array of [iy, ix]) or null.
+  routeOf(p, u, i) {
+    const r = this.tracks[p].routes[u];
+    if (!r) return null;
+    const j = r.people.indexOf(i);
+    if (j < 0) return null;
+    const out = [];
+    for (let k = r.offsets[j]; k < r.offsets[j + 1]; k++) out.push([r.cells[2 * k], r.cells[2 * k + 1]]);
+    return out;
+  }
+
+  // Seconds person i spends in harmful gas under each planner (state 2 per second).
+  gasSeconds(i) {
+    const out = {};
+    for (const [p, tr] of Object.entries(this.tracks)) {
+      let s = 0;
+      for (let k = 0; k * this.n + i < tr.state.length; k++) if (tr.state[k * this.n + i] === 2) s++;
+      out[p] = s;
+    }
+    return out;
+  }
+
+  select(i) {
+    this.selected = i;
+    this.lastPathKey = null;
+  }
+
+  // Green: the selected planner's latest plan (updates with the models); yellow: its first
+  // plan at the alarm; red: where the plain nearest-exit plan actually took this person.
+  drawPaths(t) {
+    const i = this.selected;
+    if (i === null || i === undefined) { this.pathGroup.clear(); return; }
+    const routes = this.tracks[this.planner].routes;
+    let u = -1;
+    routes.forEach((r, k) => { if (r.t <= t + 1e-6) u = k; });
+    const key = `${i}|${this.planner}|${u}`;
+    if (key === this.lastPathKey) return;
+    this.lastPathKey = key;
+    this.pathGroup.clear();
+    const c = this.cell, F = this.F;
+    const line = (cells, colour, lift, radius) => {
+      if (!cells || cells.length < 2) return;
+      const pts = cells.map(([iy, ix]) => F.P((ix + 0.5) * c, (iy + 0.5) * c, lift));
+      const geo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, false, "catmullrom", 0), pts.length * 4, radius, 6, false);
+      const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: colour, transparent: true, opacity: 0.9, depthTest: false }));
+      mesh.renderOrder = 20;
+      this.pathGroup.add(mesh);
+    };
+    const near = this.tracks.nearest;
+    if (near) {  // actual nearest-exit trajectory, de-duplicated
+      const cells = [];
+      for (let k = 0; k * this.n + i < near.state.length; k++) {
+        const cy = near.cells[2 * (k * this.n + i)], cx = near.cells[2 * (k * this.n + i) + 1];
+        const last = cells.at(-1);
+        if (!last || last[0] !== cy || last[1] !== cx) cells.push([cy, cx]);
+        if (near.state[k * this.n + i] === 3) break;
+      }
+      line(cells, "#e34948", 0.35, 0.16);
+    }
+    if (routes.length) line(this.routeOf(this.planner, 0, i), "#eda100", 0.6, 0.16);
+    if (u >= 0) line(this.routeOf(this.planner, u, i), "#1baf7a", 0.85, 0.2);
+  }
+
+  followCamera(camera) {
+    const i = this.selected;
+    if (i === null || i === undefined) return false;
+    const track = this.tracks[this.planner];
+    const k0 = this.frameIndex(this.t);
+    const [x, y] = this.personXY(track, k0, i);
+    const [x1, y1] = this.personXY(track, this.frameIndex(this.t + 3), i);
+    let dx = x1 - x, dy = y1 - y;
+    const d = Math.hypot(dx, dy);
+    if (d < 0.1) { dx = 0; dy = 1; } else { dx /= d; dy /= d; }
+    camera.position.copy(this.F.P(x - 7 * dx, y - 7 * dy, 4.5));
+    camera.lookAt(this.F.P(x + 4 * dx, y + 4 * dy, 1.0));
+    return true;
   }
 
   frameIndex(t) { return Math.max(0, Math.min(this.rep.times.length - 1, Math.floor(t))); }
@@ -234,6 +318,7 @@ export class Replay {
     const alarm = this.rep.t_alarm !== null && this.t >= this.rep.t_alarm;
     this.parts.machines.userData.stopped = alarm;  // robot arms and conveyors e-stop too
     this.parts.zone.show(this.rep.height_zone, alarm ? this.t : null);
+    this.drawPaths(this.t);
     const pulse = 1 + 0.15 * Math.sin(performance.now() / 180);
     for (const r of this.rings) if (r.visible) r.material.opacity = 0.55 + 0.35 * Math.sin(performance.now() / 250);
     return pulse;
@@ -300,7 +385,8 @@ export function replayPanel(replay) {
       <div class="ticks">${updates}${rep.t_alarm !== null ? `<b style="left:${(100 * rep.t_alarm) / rep.t_end}%"></b>` : ""}</div></div>
     <div id="r-text"></div>
     <div class="rcharts"><canvas id="r-out" width="420" height="110"></canvas><canvas id="r-ingas" width="420" height="110"></canvas>
-      <div id="r-legend"></div></div>`;
+      <div id="r-legend"></div></div>
+    <div id="r-person" hidden></div>`;
   document.body.appendChild(el);
   const $ = (id) => document.getElementById(id);
   $("r-play").onclick = () => {
@@ -320,6 +406,17 @@ export function replayPanel(replay) {
   const curves = planCurves(replay);
   $("r-legend").innerHTML = Object.keys(curves).map((p) => `<span style="color:${PLAN_COLOURS[p] || "#ccc"}">&#9644; ${p}</span>`).join(" ");
   return () => {
+    const card = $("r-person");
+    if (replay.selected !== null && replay.selected !== undefined) {
+      const i = replay.selected, g = replay.gasSeconds(i);
+      card.hidden = false;
+      card.innerHTML = `<b>Person ${i}</b> &middot; <span style="color:#1baf7a">&#9644; ${replay.planner} plan now</span> ` +
+        `<span style="color:#eda100">&#9644; first plan</span> <span style="color:#e34948">&#9644; nearest-exit path</span><br>` +
+        `seconds in gas: ${Object.entries(g).map(([p, s]) => `${p} ${s} s`).join(" &middot; ")} &middot; ` +
+        `<button id="r-follow">${replay.follow ? "Stop following" : "Follow"}</button> <button id="r-clear">Clear</button>`;
+      $("r-follow").onclick = () => { replay.follow = !replay.follow; };
+      $("r-clear").onclick = () => { replay.select(null); replay.follow = false; };
+    } else card.hidden = true;
     drawCurves($("r-out"), curves, "out", "% of people out", replay.t, rep.t_end, 100);
     drawCurves($("r-ingas"), curves, "gas", "people in harmful gas now", replay.t, rep.t_end, null);
     $("r-play").innerHTML = replay.playing ? "&#10074;&#10074; Pause" : "&#9654; Play";
