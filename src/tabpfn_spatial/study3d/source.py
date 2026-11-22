@@ -14,7 +14,9 @@ Features: readings / the strongest reading (release rates are unknown, so only t
 counts) + wind speed. Targets: leak x and y (m). Score: horizontal error (m).
 
 Workflows (leave-one-setup-out): ``real->real`` (context: the real rows of the other
-setups, at most 6 rows from 3 leak positions), ``A real->sim`` (same context, tested on the
+setups, at most 6 rows from 3 leak positions; setups A and B share one tank position, so
+for them this is a lookup), ``real->real new position`` (only context leaks more than
+0.1 m from the target's), ``A real->sim`` (same context, tested on the
 held-out setup's simulated leaks), ``B same-site`` (context: simulated leaks of the target
 site), ``B other-sites`` (simulated leaks of the other setups). References without TabPFN:
 ``strongest detector`` (its position) and ``physics inversion`` (the simulated leak of the
@@ -118,8 +120,16 @@ def run(backend: str, seed: int = 0) -> list[dict]:
             truth = c.source[:2]
             ps_same = tabpfn(*sim[c.name], real[c.name][None])[0]
             peak = int(np.nanargmax(np.nan_to_num(real[c.name][:-1], nan=-1)))
+            far = [o for o in others if np.hypot(*(o.source[:2] - c.source[:2])) > 0.1]
+            if far:  # context leaks never at the target's position (A and B share a tank)
+                xf = np.vstack([real[o.name] for o in far])
+                pf = np.vstack([o.source[None] for o in far])
+                p_new = tabpfn(xf, pf, real[c.name][None])[0]
+            else:
+                p_new = np.full(2, np.nan)
             res = {
                 "real->real": pr[k],
+                "real->real new position": p_new,
                 "B same-site": ps_same,
                 "B other-sites": po[k],
                 "strongest detector": DETECTORS[peak, :2],
@@ -136,7 +146,7 @@ def run(backend: str, seed: int = 0) -> list[dict]:
             rows.append({"case": c.name, "setup": setup, "workflow": "A real->sim",
                          "backend": backend, "error_m": float(np.median(a_rows)),
                          "error_p90_m": float(np.percentile(a_rows, 90))})  # fmt: skip
-            print(c.name, " ".join(f"{r['workflow']}={r['error_m']:.2f}" for r in rows[-6:]),
+            print(c.name, " ".join(f"{r['workflow']}={r['error_m']:.2f}" for r in rows[-7:]),
                   flush=True)  # fmt: skip
     return rows
 

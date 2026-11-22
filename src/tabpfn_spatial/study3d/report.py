@@ -163,10 +163,49 @@ def fig_source(out: Path, run: str) -> Path:
     return out
 
 
+def fig_profiles(out: Path) -> Path:
+    """Real vs simulated vertical profiles downwind, one experiment per setup (calibrated)."""
+    from tabpfn_spatial.study3d import cases as cs
+    from tabpfn_spatial.study3d.evaluate import vertical_profile
+
+    fields = np.load(RES / "fields_redvapor_kcal.npz")
+    cases = {c.name: c for c in cs.redvapor_cases()}
+    pick = [("exp1", "A: tank only"), ("exp2", "B: tank + tall cylinder"),
+            ("exp4", "C: full site"), ("exp6", "D: full site, turned")]  # fmt: skip
+    levels = [("L1", "L1 plume"), ("L3", "L3 mass-consistent wind"),
+              ("L4", "L4a CFD wind + CFD K"), ("L4G", "L4b GADEN in CFD wind")]  # fmt: skip
+    fig, axes = plt.subplots(1, 4, figsize=(13, 4.4), sharey=True)
+    for ax, (name, title) in zip(axes, pick, strict=True):
+        c = cases[name]
+        z, p = vertical_profile(c.xyz, c.obs, c.source, c.flow.direction)
+        ax.plot(p, z, color=INK, lw=2.5, marker="o", ms=4, label="real (PID excess)")
+        for k, (lv, lab) in enumerate(levels):
+            key = f"{name}_{lv}"
+            if key not in fields:
+                continue
+            zm, pm = vertical_profile(c.xyz, fields[key].astype(float), c.source, c.flow.direction)
+            ax.plot(pm, zm, color=PALETTE[k], lw=1.8, label=lab)
+        ax.axhline(c.source[2], color=MUTED, lw=1, ls=":")
+        ax.set_title(f"{name}, setup {title}", fontsize=9, color=INK, loc="left")
+        ax.set_xlabel("normalised mean concentration")
+        _style(ax)
+    axes[0].set_ylabel("height (m, 1:50 model)")
+    axes[0].legend(fontsize=7, frameon=False, loc="upper right")
+    fig.suptitle("Does height come out right? Downwind vertical profiles, real vs each level "
+                 "(calibrated turbulence; dotted: release height)", fontsize=11, color=INK,
+                 x=0.01, ha="left")  # fmt: skip
+    fig.tight_layout()
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    return out
+
+
 def main() -> int:
     """Write every figure whose results exist."""
     FIG.mkdir(parents=True, exist_ok=True)
     print(fig_ladder(FIG / "ladder.png"))
+    if (RES / "fields_redvapor_kcal.npz").exists():
+        print(fig_profiles(FIG / "profiles.png"))
     if _load("transfer_cloud_L3_kcal"):
         print(fig_transfer_hazard(FIG / "transfer_hazard.png"))
     for b in ("cloud", "baseline"):

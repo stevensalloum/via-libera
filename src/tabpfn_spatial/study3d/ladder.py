@@ -66,10 +66,6 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
-
-
 def calibrate(dataset: str = "redvapor", factors: tuple[str, ...] = ("", "_k4", "_k8")) -> Path:
     """Leave-one-setup-out choice of the turbulence factor, per level.
 
@@ -147,3 +143,7 @@ def main_l4(factors: tuple[float, ...] = (1.0, 4.0, 8.0)) -> None:
                 f"w={r['width_ratio']:.2f}" for r in rows[-2:]), flush=True)  # fmt: skip
         (OUT / f"ladder_redvapor{tag}.json").write_text(json.dumps(rows, indent=1))
         np.savez_compressed(OUT / f"fields_redvapor{tag}.npz", **fields)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
