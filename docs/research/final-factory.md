@@ -76,13 +76,13 @@ from tabpfn_spatial.sim.layouts import template
 from tabpfn_spatial.sim.plant3d import Plant3D
 from tabpfn_spatial.sim.gas3d import Leak3D, Ventilation, simulate
 
-plant = Plant3D(template("T-plant"))          # hydrogen
-sites, weights = plant.leak_sites              # (n, 3), (n,)
+plant = Plant3D(template("T-plant"))  # hydrogen
+sites, weights = plant.leak_sites  # (n, 3), (n,)
 leak = Leak3D(tuple(sites[0]), rate=1.2, gas=plant.f.gas)
 run = simulate(plant, leak, Ventilation.from_condition("wind_drift", speed=0.6))
-r = run.readings(np.random.default_rng(0))     # positions (k, 2), heights (k,), values (k, T)
+r = run.readings(np.random.default_rng(0))  # positions (k, 2), heights (k,), values (k, T)
 t_alarm = run.alarm(r)
-volume = run.volumes_zyx()                     # (T, z, y, x) for the hazard model
+volume = run.volumes_zyx()  # (T, z, y, x) for the hazard model
 ```
 
 ## What stays open
