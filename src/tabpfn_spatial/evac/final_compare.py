@@ -213,10 +213,11 @@ def compute(summary: dict, latency: dict, out: Path) -> Path:
     for x, v in enumerate(bottoms):
         ax.text(x, v, f"{v:.1f} s", ha="center", va="bottom", fontsize=10, color=INK)
     ax.axhline(15, color="#e34948", lw=1, ls="--")
-    ax.text(1.32, 15, "update every 15 s", va="center", fontsize=9, color="#e34948")
+    ax.text(-0.45, 15.6, "models asked every 15 s", va="bottom", fontsize=9, color="#e34948")
     ax.set_xticks([0, 1], ["k-NN (laptop)", "TabPFN (cloud API)"])
     ax.set_ylabel("seconds per model update", color=INK)
-    ax.set_title("one model update in an emergency (median)", color=INK, fontsize=10)
+    ax.set_title("one model update, T-plant 90 x 80 m (median); the planner uses the\n"
+                 "latest finished one", color=INK, fontsize=10)  # fmt: skip
     ax.legend(frameon=False, fontsize=9, loc="upper left")
     _style(ax)
     fig.tight_layout()
