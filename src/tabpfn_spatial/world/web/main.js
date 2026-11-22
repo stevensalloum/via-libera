@@ -134,18 +134,31 @@ layer("high-quality", (on) => { highQuality = on; });
 layer("show-pipes", (on) => { parts.pipes.visible = on; });
 
 $("walk").onclick = () => {
-  const e = scene.exits[0];
-  const inward = { west: [3, 0], east: [-3, 0], south: [0, 3], north: [0, -3] }[e.side];
-  nav.startWalk(e.xy[0] + inward[0], e.xy[1] + inward[1], scene.width / 2, scene.height / 2);
+  // Start just inside the exit with the longest open run inwards, looking down that run.
+  let best = null;
+  for (const e of scene.exits) {
+    const n = e.normal || { west: [-1, 0], east: [1, 0], south: [0, -1], north: [0, 1] }[e.side];
+    let run = 0;
+    while (run < 60 && !nav.blocked(e.xy[0] - (run + 0.5) * n[0], e.xy[1] - (run + 0.5) * n[1])) run += 0.5;
+    if (!best || run > best.run) best = { e, n, run };
+  }
+  const { e, n, run } = best;
+  const d = Math.min(3, run / 2);
+  const [x, y] = [e.xy[0] - d * n[0], e.xy[1] - d * n[1]];
+  nav.startWalk(x, y, x - 10 * n[0], y - 10 * n[1]);
 };
+nav.walk.addEventListener("lock", () => { $("resume").hidden = true; });
+document.addEventListener("pointerlockerror", () => {  // lock refused: keys + drag still work
+  $("walkhelp").hidden = false;
+});
 $("orbit").onclick = () => nav.startOrbit();
 nav.walk.addEventListener("lock", () => { $("walkhelp").hidden = false; $("crosshair").hidden = false; $("show-walls").checked = true; parts.outer.cladding.visible = true; });
-nav.walk.addEventListener("unlock", () => { $("walkhelp").hidden = true; $("crosshair").hidden = true; if (nav.mode === "walk") $("resume").hidden = false; });
+nav.walk.addEventListener("unlock", () => { $("crosshair").hidden = true; $("walkhelp").hidden = nav.mode !== "walk"; if (nav.mode === "walk") $("resume").hidden = false; });
 $("resume").onclick = () => { $("resume").hidden = true; nav.walk.lock(); };
 addEventListener("keydown", (e) => {
   if (e.code === "Digit1") nav.flyTo(...VIEWS.overview());
   if (e.code === "Digit2") nav.flyTo(...VIEWS.top());
-  if (e.code === "KeyO" && nav.mode === "walk") { $("resume").hidden = true; nav.startOrbit(); }
+  if (e.code === "KeyO" && nav.mode === "walk") { $("resume").hidden = true; $("walkhelp").hidden = true; nav.startOrbit(); }
 });
 
 // ------------------------------------------------------------------------ replay --

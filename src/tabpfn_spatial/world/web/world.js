@@ -214,23 +214,41 @@ function pipes(scene, F) {
   return shadows(g);
 }
 
+// Gas detectors as installed in plants: bracket-mounted on the face of the wall or machine
+// next to them, or hung from the roof on a drop rod; mounted high for light gases, low for
+// heavy ones (scene.sensor_mounts, from the exporter). No floor poles.
 function sensors(scene, F) {
   const g = new THREE.Group();
-  const pole = new THREE.MeshStandardMaterial({ color: "#3a3f45", metalness: 0.5, roughness: 0.5 });
+  const metal = new THREE.MeshStandardMaterial({ color: "#3a3f45", metalness: 0.5, roughness: 0.5 });
   const head = new THREE.MeshStandardMaterial({ color: "#f5d000", roughness: 0.5 });
+  const c = scene.cell;
+  const mounts = scene.sensor_mounts || scene.sensors.map(() => ({ kind: "ceiling", dir: [0, 0], z: 4.0 }));
   scene.sensors.forEach(([x, y], i) => {
-    const s = new THREE.Group();
-    s.add(tube(F.P(x, y, 0), F.P(x, y, 2.0), 0.035, pole, 8));
+    const m = mounts[i], s = new THREE.Group();
+    let px = x, py = y;
+    if (m.kind === "wall") {  // on the wall face: half a cell towards the solid, minus the bracket
+      px = x + m.dir[0] * (c / 2 - 0.12);
+      py = y + m.dir[1] * (c / 2 - 0.12);
+      const plate = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.42, 0.3), metal);
+      plate.position.copy(F.P(x + m.dir[0] * (c / 2 - 0.02), y + m.dir[1] * (c / 2 - 0.02), m.z));
+      plate.scale.set(m.dir[0] ? 0.15 : 1, 1, m.dir[1] ? 0.15 : 1);
+      s.add(plate);
+    } else {  // hung from the roof structure
+      s.add(tube(F.P(x, y, scene.hall_height), F.P(x, y, m.z + 0.2), 0.02, metal, 6));
+    }
     const h = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.3, 0.16), head);
-    h.position.copy(F.P(x, y, 2.1));
+    h.position.copy(F.P(px, py, m.z));
     s.add(h);
+    const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 0.12, 12), metal);
+    cone.position.copy(F.P(px, py, m.z - 0.2));  // sensing head points down
+    s.add(cone);
     const led = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 6),
       new THREE.MeshStandardMaterial({ color: "#2bff6a", emissive: "#14ff55", emissiveIntensity: 1.6 }));
-    led.position.copy(F.P(x, y, 2.3));
+    led.position.copy(F.P(px, py, m.z + 0.2));
     led.userData.sensor = i;
     s.add(led);
     const l = label(`S${i}`, "sensor");
-    l.position.copy(F.P(x, y, 2.6));
+    l.position.copy(F.P(px, py, m.z + 0.5));
     s.add(l);
     g.add(shadows(s));
   });

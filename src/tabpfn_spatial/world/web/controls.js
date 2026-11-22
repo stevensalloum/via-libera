@@ -45,6 +45,33 @@ export class Navigator {
     this.fly = null;
     addEventListener("keydown", (e) => this.keys.add(e.code));
     addEventListener("keyup", (e) => this.keys.delete(e.code));
+    addEventListener("blur", () => this.keys.clear());
+    // Mouse look without pointer lock (lock refused, lost with Esc, or in an embedded view):
+    // drag to look around. With the lock, PointerLockControls handles the mouse.
+    this.drag = null;
+    dom.addEventListener("pointerdown", (e) => { if (this.mode === "walk" && !this.walk.isLocked) this.drag = [e.clientX, e.clientY]; });
+    addEventListener("pointerup", () => { this.drag = null; });
+    addEventListener("pointermove", (e) => {
+      if (!this.drag || this.mode !== "walk") return;
+      const [x0, y0] = this.drag;
+      this.drag = [e.clientX, e.clientY];
+      const euler = new THREE.Euler(0, 0, 0, "YXZ").setFromQuaternion(this.camera.quaternion);
+      euler.y -= (e.clientX - x0) * 0.004;
+      euler.x = Math.max(-1.4, Math.min(1.4, euler.x - (e.clientY - y0) * 0.004));
+      this.camera.quaternion.setFromEuler(euler);
+    });
+  }
+
+  // Nearest open spot to (x, y), searching outwards on a 0.5 m lattice.
+  openNear(x, y) {
+    if (!this.blocked(x, y)) return [x, y];
+    for (let r = 0.5; r < 30; r += 0.5) {
+      for (let a = 0; a < 16; a++) {
+        const px = x + r * Math.cos((a * Math.PI) / 8), py = y + r * Math.sin((a * Math.PI) / 8);
+        if (!this.blocked(px, py)) return [px, py];
+      }
+    }
+    return [x, y];
   }
 
   blocked(x, y) {
@@ -58,6 +85,8 @@ export class Navigator {
   startWalk(x, y, lx, ly) {
     this.mode = "walk";
     this.orbit.enabled = false;
+    this.fly = null;
+    [x, y] = this.openNear(x, y);
     this.camera.position.copy(this.F.P(x, y, EYE));
     this.camera.lookAt(this.F.P(lx, ly, EYE));
     this.walk.lock();
@@ -87,7 +116,6 @@ export class Navigator {
       if (f.s >= 1) this.fly = null;
     }
     if (this.mode === "orbit") { this.orbit.update(); return; }
-    if (!this.walk.isLocked) return;
     const k = this.keys, speed = (k.has("ShiftLeft") || k.has("ShiftRight") ? RUN : WALK) * dt;
     const fwd = (k.has("KeyW") || k.has("ArrowUp") ? 1 : 0) - (k.has("KeyS") || k.has("ArrowDown") ? 1 : 0);
     const side = (k.has("KeyD") || k.has("ArrowRight") ? 1 : 0) - (k.has("KeyA") || k.has("ArrowLeft") ? 1 : 0);

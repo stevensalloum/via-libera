@@ -199,6 +199,36 @@ def _side(f: Factory, xy: np.ndarray) -> str:
     return min(d, key=d.get)
 
 
+# Detector mounting height by gas density (gas-detector practice): light gases rise, so
+# detectors go high, near the pipe rack; heavy gases sink, so they go near the floor; gases
+# about as dense as air at breathing height. The 2D gas model does not use the height.
+MOUNT_Z = {"light": 4.0, "heavy": 0.45, "neutral": 1.6}
+
+
+def sensor_mounts(f: Factory) -> list[dict]:
+    """How and how high each detector is mounted.
+
+    On the face of a neighbouring wall, machine or the outer wall (``wall``, ``dir`` = towards
+    it), else hung from the roof (``ceiling``); the height follows the plant's gas.
+    """
+    from tabpfn_spatial.sim.gases import GASES
+
+    sg = GASES[f.gas].sg if f.gas in GASES else 1.0
+    z = MOUNT_Z["light" if sg < 0.9 else "heavy" if sg > 1.1 else "neutral"]
+    out = []
+    for xy in f.sensors:
+        iy, ix = f.cell_of(xy)
+        mount = {"kind": "ceiling", "dir": [0, 0], "z": z}
+        for dy, dx in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+            ny_, nx_ = iy + dy, ix + dx
+            off_grid = not (0 <= ny_ < f.ny and 0 <= nx_ < f.nx)  # the outer wall
+            if off_grid or f.walls[ny_, nx_]:
+                mount = {"kind": "wall", "dir": [dx, dy], "z": z}
+                break
+        out.append(mount)
+    return out
+
+
 def scene(f: Factory, people: int = 0, seed: int = 0) -> dict:
     """Everything the viewer needs, JSON-ready. O(ny * nx).
 
@@ -232,6 +262,7 @@ def scene(f: Factory, people: int = 0, seed: int = 0) -> dict:
         "leak_sites": f.leak_sites.tolist(),
         "ignition": cells(f.ignition),
         "sensors": f.sensors.tolist(),
+        "sensor_mounts": sensor_mounts(f),
         "exits": [_exit_info(f, e) for e in f.exits],
         "people": crowd.tolist(),
         "leak_z": leak_heights(f),

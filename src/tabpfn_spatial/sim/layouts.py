@@ -179,18 +179,47 @@ def _exits(rng, walls, inside, cell, spacing) -> np.ndarray | None:
     return (cand[pick][:, ::-1] + 0.5) * cell
 
 
-def _sensors(rng, walls, cell, w, h, spacing) -> np.ndarray:
-    open_yx = np.argwhere(~walls)
-    centres = (open_yx[:, ::-1] + 0.5) * cell
-    out = []
+def _sensors(rng, walls, cell, w, h, spacing, pipes=None, fittings=None) -> np.ndarray:
+    """Detectors where real ones go: next to a wall or machine, near the pipes first.
+
+    Mountable = an open cell next to a wall, machine or the outer wall.
+
+    1. Near pipes: fittings (most leaks start there) in random order, each takes the
+       nearest mountable cell within 3 cells, if no detector is within ``0.6 spacing``.
+    2. Coverage: on a ``spacing`` grid, any spot with no detector within ``spacing`` gets
+       the nearest mountable cell.
+    """
+    ny, nx = walls.shape
+    pad = np.pad(walls, 1, constant_values=True)
+    next_to_solid = pad[:-2, 1:-1] | pad[2:, 1:-1] | pad[1:-1, :-2] | pad[1:-1, 2:]
+    mount = np.argwhere(~walls & next_to_solid)
+    if len(mount) == 0:
+        mount = np.argwhere(~walls)
+    mxy = (mount[:, ::-1] + 0.5) * cell
+    chosen: list[np.ndarray] = []
+
+    def far_enough(p: np.ndarray, d: float) -> bool:
+        return all(np.hypot(*(p - q)) >= d for q in chosen)
+
+    if fittings is not None:
+        fit = np.argwhere(fittings & ~walls)
+        for k in rng.permutation(len(fit)):
+            f = (fit[k][::-1] + 0.5) * cell
+            dist = np.hypot(*(mxy - f).T)
+            j = int(np.argmin(dist))
+            if dist[j] <= 3 * cell and far_enough(mxy[j], 0.6 * spacing):
+                chosen.append(mxy[j])
     for gy in np.arange(spacing / 2, h, spacing):
         for gx in np.arange(spacing / 2, w, spacing):
-            target = np.array([gx, gy]) + rng.uniform(-2, 2, size=2)
-            dist = ((centres - target) ** 2).sum(1)
-            k = int(np.argmin(dist))
-            if dist[k] < (spacing / 2) ** 2:
-                out.append(centres[k])
-    return np.unique(np.array(out), axis=0)
+            t = np.array([gx, gy]) + rng.uniform(-2, 2, size=2)
+            c = (int(np.clip(t[1] // cell, 0, ny - 1)), int(np.clip(t[0] // cell, 0, nx - 1)))
+            if walls[c] and not (~walls).any():
+                continue
+            dist = np.hypot(*(mxy - t).T)
+            j = int(np.argmin(dist))
+            if dist[j] < spacing / 2 and far_enough(mxy[j], spacing * 0.7):
+                chosen.append(mxy[j])
+    return np.unique(np.array(chosen), axis=0)
 
 
 def _agv_loop(rng, walls, prod_rect, cell) -> np.ndarray | None:
@@ -262,7 +291,7 @@ def shaped(
             loop = _agv_loop(rng, walls, p.production[k % len(p.production)], cell)
             if loop is not None:
                 loops.append(loop)
-        sensors = _sensors(rng, walls, cell, width, height, sensor_spacing)
+        sensors = _sensors(rng, walls, cell, width, height, sensor_spacing, *network)
         return Factory(width, height, cell, walls, machines, exits, sensors, *network,
                        outside=~inside, wings=p.wings, agv_lanes=tuple(loops), gas=gas,
                        name=name or f"{kind}-plant")  # fmt: skip
