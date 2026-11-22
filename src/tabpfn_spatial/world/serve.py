@@ -133,6 +133,13 @@ def main() -> int:
     p.add_argument("--leak", type=int, default=500, help="replay leak seed")
     p.add_argument("--models", default="tabpfn", choices=("tabpfn", "perfect", "baseline"))
     p.add_argument(
+        "--physics",
+        default="3d",
+        choices=("2d", "3d"),
+        help="3d: gas, alarm and the team's 3D models (final pipeline)",
+    )
+    p.add_argument("--n-train", type=int, default=200, help="3D training leaks per model")
+    p.add_argument(
         "--backend",
         default="auto",
         help="team models: auto (cloud TabPFN when a token is set), cloud, or baseline (offline)",
@@ -163,7 +170,7 @@ def main() -> int:
 
             a.backend = pick_backend(a.backend) if a.models == "tabpfn" else "baseline"
             tag = a.backend if a.models == "tabpfn" else "sim"
-            a.out = base / f"replay-{a.rung}-leak{a.leak}-{a.models}-{tag}"
+            a.out = base / f"replay-{a.rung}-leak{a.leak}-{a.models}-{tag}-{a.physics}"
         else:
             a.out = base / (f.name.replace(" ", "-") if f.name else "plant")
     elif a.replay and a.models == "tabpfn":
@@ -181,7 +188,15 @@ def main() -> int:
             f"running {rung.label}, leak {a.leak}, models {a.models} ({a.backend}); "
             "a few minutes with the team's models..."
         )
-        print("replay:", write_replay(make_replay(rung, a.leak, a.models, a.backend), a.out))
+        print(
+            "replay:",
+            write_replay(
+                make_replay(
+                    rung, a.leak, a.models, a.backend, physics=a.physics, n_train=a.n_train
+                ),
+                a.out,
+            ),
+        )
     else:
         (a.out / "replay.json").unlink(missing_ok=True)
         print("scene:", write_scene(f, a.out, a.people, a.seed))

@@ -6,7 +6,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 import { DOOR_W } from "./world.js";
 
-const EYE = 1.7, RADIUS = 0.3, WALK = 3.0, RUN = 7.0;
+const EYE = 1.7, RADIUS = 0.3, WALK = 3.0, RUN = 7.0, TURN = 1.8;  // m/s, m/s, rad/s
 
 export function makeSolidTest(scene) {
   const { width: W, height: H, cell, solid } = scene;
@@ -118,7 +118,13 @@ export class Navigator {
     if (this.mode === "orbit") { this.orbit.update(); return; }
     const k = this.keys, speed = (k.has("ShiftLeft") || k.has("ShiftRight") ? RUN : WALK) * dt;
     const fwd = (k.has("KeyW") || k.has("ArrowUp") ? 1 : 0) - (k.has("KeyS") || k.has("ArrowDown") ? 1 : 0);
-    const side = (k.has("KeyD") || k.has("ArrowRight") ? 1 : 0) - (k.has("KeyA") || k.has("ArrowLeft") ? 1 : 0);
+    const side = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0);
+    const turn = (k.has("KeyQ") || k.has("ArrowLeft") ? 1 : 0) - (k.has("KeyE") || k.has("ArrowRight") ? 1 : 0);
+    if (turn) {  // turn on the spot (works without the mouse lock too)
+      const euler = new THREE.Euler(0, 0, 0, "YXZ").setFromQuaternion(this.camera.quaternion);
+      euler.y += turn * TURN * dt;
+      this.camera.quaternion.setFromEuler(euler);
+    }
     if (!fwd && !side) return;
     const dir = new THREE.Vector3();
     this.camera.getWorldDirection(dir);

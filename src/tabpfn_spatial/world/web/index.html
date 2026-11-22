@@ -37,7 +37,7 @@
     button.primary { background: #3a4a17; border-color: #6d8a1f; }
     select { width: 100%; }
     label.chk { display: flex; align-items: center; gap: 6px; margin: 3px 0; cursor: pointer; }
-    #minimap { position: fixed; left: 12px; bottom: 12px; border-radius: 6px;
+    #minimap { position: fixed; right: 12px; bottom: 12px; border-radius: 6px;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); cursor: crosshair; }
     #walkhelp, #resume { position: fixed; left: 50%; top: 16px; transform: translateX(-50%);
       background: var(--panel); padding: 8px 14px; border-radius: 8px; }
@@ -45,14 +45,24 @@
       border-radius: 50%; background: rgba(255, 255, 255, 0.8); pointer-events: none; }
     #loading { position: fixed; inset: 0; display: grid; place-items: center; background: #1b2026;
       color: var(--accent); font-size: 16px; }
-    #replay { position: fixed; left: 270px; right: 300px; bottom: 12px; background: var(--panel);
-      border-radius: 10px; padding: 10px 14px; backdrop-filter: blur(6px); }
+    #replay { position: fixed; left: 12px; top: 12px; bottom: 12px; width: 350px; overflow-y: auto;
+      background: var(--panel); border-radius: 10px; padding: 10px 12px; backdrop-filter: blur(6px); }
+    #replay .hint { color: var(--muted); font-size: 11px; }
+    #replay #r-text { margin: 4px 0; }
+    #panel.collapsed > :not(h1) { display: none; }
+    #panel h1 { cursor: pointer; }
+    #panel h1::after { content: " \25BE"; color: var(--muted); font-size: 11px; }
+    #panel.collapsed h1::after { content: " \25B8"; }
+    #minilegend { position: fixed; right: 12px; font-size: 10.5px; background: var(--panel); padding: 3px 8px;
+      border-radius: 6px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    #minilegend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 3px; vertical-align: -1px; }
     #replay .rhead span { color: var(--muted); font-size: 11.5px; }
     #replay select { width: auto; }
     #replay .rrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
     #replay .rtrack { position: relative; }
     #replay .rcharts { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-top: 6px; }
-    #replay .rcharts canvas { background: rgba(0, 0, 0, 0.25); border-radius: 6px; width: 320px; height: 84px; }
+    #replay .rcharts { flex-direction: column; align-items: stretch; }
+    #replay canvas { background: rgba(0, 0, 0, 0.25); border-radius: 6px; width: 100%; height: auto; }
     #replay #r-person { margin-top: 6px; font-size: 12px; }
     #replay #r-person button { padding: 2px 8px; font-size: 11px; }
     #replay #r-legend { font-size: 11px; display: flex; flex-direction: column; gap: 2px; }
@@ -64,7 +74,7 @@
     #r-text .alarm { color: #ff5a4f; font-weight: 700; }
     #r-text .calm { color: var(--muted); }
     #r-text .ingas { color: #ff6bf0; }
-    @media (max-width: 1100px) { #replay { left: 12px; right: 12px; bottom: 190px; } }
+    @media (max-width: 900px) { #replay { width: auto; right: 12px; top: auto; max-height: 45vh; } }
     kbd { background: #2b333d; border-radius: 3px; padding: 0 4px; border: 1px solid #3d4752; }
   </style>
 </head>
@@ -99,7 +109,7 @@
     <label class="chk"><input type="checkbox" id="high-quality" /> High quality (ambient occlusion)</label>
   </div>
   <canvas id="minimap" title="Click to fly there"></canvas>
-  <div id="walkhelp" hidden><kbd>W A S D</kbd> walk &middot; <kbd>Shift</kbd> run &middot; mouse look (or drag) &middot;
+  <div id="walkhelp" hidden><kbd>W S</kbd> walk &middot; <kbd>A D</kbd> step aside &middot; <kbd>Q E</kbd> / <kbd>&larr; &rarr;</kbd> turn &middot; <kbd>Shift</kbd> run &middot; mouse look (or drag) &middot;
     <kbd>O</kbd> back to orbit &middot; walls and machines are solid</div>
   <button id="resume" hidden>Click to lock the mouse &middot; or drag to look &middot; <kbd>O</kbd> back to orbit</button>
   <div id="crosshair" hidden></div>
