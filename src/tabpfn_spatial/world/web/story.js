@@ -129,10 +129,10 @@ function barChart(box, { groups, series, ref, ...o }) {
       hover(r, `<b>${s.name}</b> · ${g}<br>${o.yLabel}: ${fmt(v, 3)}${s.err ? ` ± ${fmt(s.err[gi], 3)} (s.e.)` : ""}`);
     });
   });
-  if (ref) {
-    const y = f.Y(ref.value);
+  if (ref) {  // a reference above the axis is drawn at the top, with its value
+    const off = ref.value > (o.yMax ?? Infinity), y = f.Y(off ? o.yMax : ref.value);
     el("line", { x1: f.L, x2: f.W - f.R, y1: y, y2: y, stroke: ref.color, "stroke-width": 2, "stroke-dasharray": "7 5" }, f.svg);
-    el("text", { x: f.W - f.R - 4, y: y - 6, fill: ref.color, "font-size": 12, "text-anchor": "end" }, f.svg).textContent = `${ref.name}: ${fmt(ref.value)}`;
+    el("text", { x: f.W - f.R - 4, y: y - 6, fill: ref.color, "font-size": 12, "text-anchor": "end" }, f.svg).textContent = `${ref.name}: ${fmt(ref.value)}${off ? " s (above the axis)" : ""}`;
   }
 }
 function scatterChart(box, { points, xMax, ...o }) {
@@ -161,15 +161,15 @@ lineChart($("c-source-size"), { title: "Release-rate error", xs: s2.size_t, xLab
 const h2 = D.hazard_2d;
 lineChart($("c-hazard-brier"), { title: "Forecast error across mixing strengths", xs: h2.diffusivity, xTicks: h2.diffusivity.map((v) => `${v}`),
   xLabel: "turbulent diffusivity (m²/s)", yLabel: "Brier score (lower is better)", yMin: 0.03, yMax: 0.07, note: `n = ${h2.n}`,
-  series: [{ name: "forward physics", color: C.base, ys: h2.brier.forward }, { name: "TabPFN", color: C.tabpfn, ys: h2.brier.tabpfn, bold: true }] });
+  series: [{ name: "deterministic physics", color: C.base, ys: h2.brier.forward }, { name: "TabPFN", color: C.tabpfn, ys: h2.brier.tabpfn, bold: true }] });
 scatterChart($("c-hazard-roc"), { title: "Operating points (harmful cells, test set)", xLabel: "false-positive rate (%)", yLabel: "recall (%)",
   yMin: 50, yMax: 100, xMax: 10, points: [
-    { name: "forward physics", color: C.base, x: h2.operating.forward[1], y: h2.operating.forward[0], label: "physics" },
+    { name: "deterministic physics", color: C.base, x: h2.operating.forward[1], y: h2.operating.forward[0], label: "deterministic physics" },
     { name: "TabPFN, P ≥ 0.5", color: C.tabpfn, x: h2.operating.tabpfn_p50[1], y: h2.operating.tabpfn_p50[0], label: "TabPFN P≥0.5" },
     { name: "TabPFN, P ≥ 0.19", color: "#ffc15e", x: h2.operating.tabpfn_p19[1], y: h2.operating.tabpfn_p19[0], label: "TabPFN P≥0.19" }] });
 const p2 = D.planner_2d, pv = (m, p) => p2[`${m}/${p}`];
 barChart($("c-planner"), { title: "Time in harmful gas per person", groups: ["risk-aware planner", "CCRP planner"], yLabel: "seconds per person", W: 1000,
-  yMax: 0.8, dec: 3, ref: { name: "nearest exit (no model)", color: C.nearest, value: pv("baseline", "nearest")[0] },
+  yMax: 0.25, dec: 3, ref: { name: "today, nearest exit (no model)", color: C.nearest, value: pv("baseline", "nearest")[0] },
   note: `${p2.plants} unseen 2D plants, one leak each; mean ± s.e. · source error of the baseline models ${fmt(p2["loc/baseline"], 1)} m, TabPFN ${fmt(p2["loc/tabpfn"], 1)} m (median)`,
   series: [["baseline models", C.base, "baseline"], ["TabPFN models", C.tabpfn, "tabpfn"], ["perfect knowledge", C.perfect, "perfect"]].map(([name, color, m]) => ({
     name, color, values: ["risk", "ccrp"].map((p) => pv(m, p)[0]), err: ["risk", "ccrp"].map((p) => pv(m, p)[1]) })) });
@@ -191,11 +191,43 @@ const ds = [["hazard_redvapor", "1:50 site"], ["hazard_orebro", "office, HVAC"],
 barChart($("c-real-auc"), { title: "Hot-zone detection on real measurements", groups: ds.map((d) => d[1]), yLabel: "AUC", yMin: 0.5, yMax: 1,
   series: [{ name: "k-NN", color: C.knn, values: ds.map((d) => re[d[0]].auc_hot.knn) }, { name: "TabPFN", color: C.tabpfn, values: ds.map((d) => re[d[0]].auc_hot.tabpfn) }] });
 
+// ---- results: per plant, and known vs never-seen ---------------------------------------------
+(() => {
+  const P = D.per_plant, box = $("c-res-plants");
+  const rows = [...P.filter((p) => p.split === "known"), ...P.filter((p) => p.split === "unseen")];
+  const W = 760, rowH = 26, T = 40, L = 120, R = 24, GAP = 22, H = T + rows.length * rowH + GAP + 40, xMax = 16;
+  box.innerHTML = `<div class="title">People exposed per plant: today vs Via Libera</div><div class="legend-row"><span><i style="background:${C.nearest}"></i>nearest exit</span><span><i style="background:${C.tabpfn}"></i>Via Libera (TabPFN)</span><span><i style="background:${C.perfect}"></i>perfect knowledge</span></div>`;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}` }, box);
+  const X = (v) => L + (v / xMax) * (W - L - R);
+  for (let v = 0; v <= xMax; v += 4) {
+    el("line", { x1: X(v), x2: X(v), y1: T - 6, y2: H - 34, stroke: "#22405c" }, svg);
+    el("text", { x: X(v), y: H - 18, fill: "#8ba3b8", "font-size": 12, "text-anchor": "middle" }, svg).textContent = v;
+  }
+  el("text", { x: (L + W - R) / 2, y: H - 2, fill: "#8ba3b8", "font-size": 12.5, "text-anchor": "middle" }, svg).textContent = "people exposed to harmful gas (%)";
+  rows.forEach((p, i) => {
+    const y = T + i * rowH + rowH / 2 + (p.split === "unseen" ? GAP : 0);
+    if (i === 0 || p.split !== rows[i - 1].split) el("text", { x: 4, y: y - 17, fill: "#f39200", "font-size": 11, "font-weight": 700 }, svg).textContent = p.split === "known" ? "KNOWN" : "NEVER SEEN";
+    el("text", { x: L - 10, y: y + 4, fill: "#cfdbe6", "font-size": 12.5, "text-anchor": "end" }, svg).textContent = p.plant.replace("default", "B-plant");
+    const [a, b, c] = p.exposed;
+    el("line", { x1: X(a), x2: X(b), y1: y, y2: y, stroke: "#5b6f82", "stroke-width": 3 }, svg);
+    if (c !== null) el("circle", { cx: X(c), cy: y, r: 7, fill: "none", stroke: C.perfect, "stroke-width": 2 }, svg);
+    const d1 = el("circle", { cx: X(a), cy: y, r: 6, fill: C.nearest }, svg), d2 = el("circle", { cx: X(b), cy: y, r: 6, fill: C.tabpfn }, svg);
+    const tipTxt = `<b>${p.plant}</b> (${p.split})<br>nearest exit ${fmt(a, 1)} % → Via Libera ${fmt(b, 1)} %` + (c !== null ? `<br>perfect knowledge ${fmt(c, 1)} %` : "") + (p.note ? `<br><i>${p.note}</i>` : "");
+    hover(d1, tipTxt); hover(d2, tipTxt);
+  });
+  box.insertAdjacentHTML("beforeend", `<div class="note">One leak per plant, same people for every method; ring = perfect knowledge of the future gas (9 plants).</div>`);
+  const nine = P.filter((p) => p.s), m = (split, k) => { const v = nine.filter((p) => p.split === split).map((p) => p.s[k]); return v.reduce((x, y) => x + y, 0) / v.length; };
+  barChart($("c-res-gap"), { title: "Time in gas per person: known vs never-seen plants", groups: ["known (5)", "never seen (4)"], yLabel: "seconds per person", yMax: 0.9, H: 300,
+    note: "Gains hold on new layouts: the TabPFN models are fitted on simulations of each new plant, no real leak data.",
+    series: [{ name: "nearest exit", color: C.nearest, values: [m("known", 0), m("unseen", 0)] }, { name: "Via Libera (TabPFN)", color: C.tabpfn, values: [m("known", 1), m("unseen", 1)] },
+      { name: "perfect knowledge", color: C.perfect, values: [m("known", 2), m("unseen", 2)] }] });
+})();
+
 // ---- flow chart ---------------------------------------------------------------------------
 (() => {
   const svg = $("flowchart");
   const blocks = [
-    [20, "Detectors", "readings every 5 s", "Wall and mast detectors, noisy; the alarm fires on the first reading above 0.03."],
+    [20, "Gas sensors", "readings every 5 s", "Concentration sensors on walls and pipe masts, noisy; the alarm fires on the first reading above 0.03."],
     [255, "Source", "where · how strong · how high", "TabPFN classifier + regressors on the sensor history: source map and release-rate quantiles (3D: height too).", 1],
     [490, "Hazard", "P(toxic), P(flammable)", "TabPFN regressor on distance to the source, time, wind, rate: probability per cell 0–120 s ahead.", 1],
     [725, "Routing", "CCRP on P(harm)", "Graph search with exit capacities; each step costs length + w · P(harm). Not a learned model."],
