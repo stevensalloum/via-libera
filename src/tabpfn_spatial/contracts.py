@@ -31,12 +31,14 @@ class SensorReadings:
 
     ``positions``: (k, 2) sensor x, y. ``times``: (t,) sample times.
     ``values``: (k, t) noisy concentrations. ``wind``: (2,) mean wind u, v in m/s.
+    ``heights``: optional (k,) detector heights in m (3D plants, ``sim.plant3d``).
     """
 
     positions: np.ndarray
     times: np.ndarray
     values: np.ndarray
     wind: np.ndarray
+    heights: np.ndarray | None = None
 
     @property
     def t_obs(self) -> float:
@@ -50,11 +52,14 @@ class SourceEstimate:
 
     ``prob``: (ny, nx), sums to 1. ``rate``: optional (q,) quantiles of the release rate
     at ``rate_levels``. Use ``top_cells`` to sample or enumerate likely sources.
+    ``height``: optional (q,) quantiles of the leak height in m at ``height_levels`` (3D).
     """
 
     prob: np.ndarray
     rate: np.ndarray | None = None
     rate_levels: np.ndarray | None = None
+    height: np.ndarray | None = None
+    height_levels: np.ndarray | None = None
 
     def top_cells(self, n: int = 5) -> np.ndarray:
         """(n, 2) grid indices (iy, ix) of the n most likely cells, best first."""
