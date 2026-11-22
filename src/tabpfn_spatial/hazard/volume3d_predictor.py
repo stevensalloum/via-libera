@@ -256,4 +256,7 @@ class TabPFNVolumePredictor:
         p_toxic[:, open_] = np.tensordot(weights, np.concatenate(toxic).reshape(shape), axes=1)
         p_fire[:, open_] = np.tensordot(weights, np.concatenate(fire).reshape(shape), axes=1)
         p_fire *= grid.ignition
+        # CDF differences mixed over sources can round a hair outside [0, 1] (seen on L-plant)
+        np.clip(p_toxic, 0.0, 1.0, out=p_toxic)
+        np.clip(p_fire, 0.0, 1.0, out=p_fire)
         return HazardVolume(times, p_toxic, p_fire)

@@ -114,8 +114,9 @@ def accuracy_factory(cloud: list[dict], knn: list[dict], out: Path) -> Path:
                             "pending: evac-final --backend baseline")  # fmt: skip
     measures = (("loc_err_median_m", "leak position error (m)", "lower is better"),
                 ("height_err_m", "leak height error (m)", "lower is better"),
-                ("hz_recall", "harmful cells caught (recall)", "higher is better"))  # fmt: skip
-    fig, axes = plt.subplots(1, 3, figsize=(12, 3.8))
+                ("hz_recall", "harmful cells caught (recall)", "higher is better"),
+                ("hz_false", "safe cells flagged (false alarms)", "lower is better"))  # fmt: skip
+    fig, axes = plt.subplots(1, 4, figsize=(15, 3.8))
     for ax, (key, title, better) in zip(axes, measures, strict=True):
         for j, (rows, col) in enumerate(((b, KNN), (a, TABPFN))):
             v = [rows[p].get(key) for p in plants]
@@ -125,7 +126,8 @@ def accuracy_factory(cloud: list[dict], knn: list[dict], out: Path) -> Path:
             if v:
                 m = float(np.median(v))
                 ax.hlines(m, j - 0.3, j + 0.3, color=INK, lw=2)
-                ax.text(j + 0.33, m, f"{m:.2f}", va="center", fontsize=9, color=INK)
+                ax.text(j + 0.33, m, f"{m:.3f}" if m < 0.1 else f"{m:.2f}", va="center", fontsize=9,
+                        color=INK)  # fmt: skip
         ax.set_xticks([0, 1], ["k-NN", "TabPFN"])
         ax.set_xlim(-0.6, 1.8)
         ax.set_title(f"{title}\n{better}", color=INK, fontsize=10)
@@ -211,10 +213,11 @@ def compute(summary: dict, latency: dict, out: Path) -> Path:
     for x, v in enumerate(bottoms):
         ax.text(x, v, f"{v:.1f} s", ha="center", va="bottom", fontsize=10, color=INK)
     ax.axhline(15, color="#e34948", lw=1, ls="--")
-    ax.text(1.32, 15, "update every 15 s", va="center", fontsize=9, color="#e34948")
+    ax.text(-0.45, 15.6, "models asked every 15 s", va="bottom", fontsize=9, color="#e34948")
     ax.set_xticks([0, 1], ["k-NN (laptop)", "TabPFN (cloud API)"])
     ax.set_ylabel("seconds per model update", color=INK)
-    ax.set_title("one model update in an emergency (median)", color=INK, fontsize=10)
+    ax.set_title("one model update, T-plant 90 x 80 m (median); the planner uses the\n"
+                 "latest finished one", color=INK, fontsize=10)  # fmt: skip
     ax.legend(frameon=False, fontsize=9, loc="upper left")
     _style(ax)
     fig.tight_layout()

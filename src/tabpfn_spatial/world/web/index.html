@@ -1,126 +1,181 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Via Libera</title>
-  <link rel="icon" href="logo.webp" />
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-      }
-    }
-  </script>
-  <style>
-    :root { --panel: rgba(11, 24, 38, 0.9); --line: #22405c; --text: #e6eef5; --muted: #8ba3b8;
-      --accent: #f39200; --cyan: #3fc1e8; --navy: #0b1622; }
-    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--navy);
-      font: 13px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--text); }
-    #app, #app canvas { position: fixed; inset: 0; }
-    .labels { position: fixed; inset: 0; pointer-events: none; }
-    .label { padding: 2px 7px; border-radius: 4px; background: rgba(15, 18, 22, 0.72); color: #fff;
-      font-size: 12px; white-space: nowrap; }
-    .label.hot { background: rgba(160, 50, 0, 0.82); }
-    .label.exit { background: rgba(15, 130, 60, 0.88); font-weight: 600; }
-    .label.sensor { background: rgba(20, 90, 170, 0.75); font-size: 10px; padding: 1px 4px; }
-    .label.zone { background: rgba(20, 60, 140, 0.9); font-weight: 700; font-size: 12px; }
-    #panel { position: fixed; top: 12px; right: 12px; width: 270px; background: var(--panel);
-      border-radius: 10px; padding: 12px 14px; backdrop-filter: blur(6px); }
-    #panel h1 { font-size: 15px; margin: 0 0 2px; color: var(--accent); letter-spacing: 0.3px; }
-    #panel .sub { color: var(--muted); font-size: 11.5px; margin-bottom: 10px; }
-    #panel h2 { font-size: 11px; text-transform: uppercase; color: var(--muted); margin: 12px 0 6px;
-      letter-spacing: 0.6px; }
-    .row { display: flex; gap: 6px; flex-wrap: wrap; }
-    #panel, #replay, #minilegend { border: 1px solid var(--line); }
-    .brand { display: flex; align-items: center; gap: 8px; }
-    .brand img { height: 26px; background: #fff; border-radius: 5px; padding: 2px 5px; }
-    #replay .rhead b { color: var(--accent); font-size: 14px; letter-spacing: 0.4px; }
-    button, select { background: #132a3e; color: var(--text); border: 1px solid #24435e; border-radius: 6px;
-      padding: 5px 9px; font: inherit; cursor: pointer; }
-    button:hover, select:hover { border-color: var(--accent); }
-    button.primary { background: linear-gradient(90deg, #d96b00, #f39200); border-color: #f39200; color: #fff; }
-    select { width: 100%; }
-    label.chk { display: flex; align-items: center; gap: 6px; margin: 3px 0; cursor: pointer; }
-    #minimap { position: fixed; right: 12px; bottom: 12px; border-radius: 6px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); cursor: crosshair; }
-    #walkhelp, #resume { position: fixed; left: 50%; top: 16px; transform: translateX(-50%);
-      background: var(--panel); padding: 8px 14px; border-radius: 8px; }
-    #crosshair { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px;
-      border-radius: 50%; background: rgba(255, 255, 255, 0.8); pointer-events: none; }
-    #loading { position: fixed; inset: 0; display: grid; place-items: center; background: var(--navy);
-      color: var(--accent); font-size: 16px; }
-    #replay { position: fixed; left: 12px; top: 12px; bottom: 12px; width: 350px; overflow-y: auto;
-      background: var(--panel); border-radius: 10px; padding: 10px 12px; backdrop-filter: blur(6px); }
-    #replay .hint { color: var(--muted); font-size: 11px; }
-    #replay #r-text { margin: 4px 0; }
-    #panel.collapsed > :not(h1) { display: none; }
-    #panel h1 { cursor: pointer; }
-    #panel h1::after { content: " \25BE"; color: var(--muted); font-size: 11px; }
-    #panel.collapsed h1::after { content: " \25B8"; }
-    #minilegend { position: fixed; right: 12px; font-size: 10.5px; background: var(--panel); padding: 3px 8px;
-      border-radius: 6px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-    #minilegend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 3px; vertical-align: -1px; }
-    #replay .rhead span { color: var(--muted); font-size: 11.5px; }
-    #replay select { width: auto; }
-    #replay .rrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
-    #replay .rtrack { position: relative; }
-    #replay .rcharts { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-top: 6px; }
-    #replay .rcharts { flex-direction: column; align-items: stretch; }
-    #replay canvas { background: rgba(0, 0, 0, 0.25); border-radius: 6px; width: 100%; height: auto; }
-    #replay #r-person { margin-top: 6px; font-size: 12px; }
-    #replay #r-person button { padding: 2px 8px; font-size: 11px; }
-    #replay #r-legend { font-size: 11px; display: flex; flex-direction: column; gap: 2px; }
-    #replay input[type=range] { width: 100%; accent-color: var(--accent); }
-    #replay .ticks { position: relative; height: 8px; }
-    #replay .ticks i { position: absolute; width: 2px; height: 8px; background: #19e3ff; }
-    #replay .ticks b { position: absolute; width: 3px; height: 10px; background: #ff3b30; top: -1px; }
-    #r-text { font-size: 12px; color: var(--text); }
-    #r-text .alarm { color: #ff5a4f; font-weight: 700; }
-    #r-text .calm { color: var(--muted); }
-    #r-text .ingas { color: #ff6bf0; }
-    @media (max-width: 900px) { #replay { width: auto; right: 12px; top: auto; max-height: 45vh; } }
-    kbd { background: #132a3e; border-radius: 3px; padding: 0 4px; border: 1px solid #24435e; }
-    #replay .ticks i { background: var(--cyan); }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Via Libera</title>
+<link rel="icon" href="logo.webp" />
+<link rel="stylesheet" href="story.css" />
 </head>
 <body>
-  <div id="app"></div>
-  <div id="loading">Building the factory...</div>
-  <div id="panel">
-    <h1>Via Libera &middot; world</h1>
-    <div class="sub" id="info"></div>
-    <h2>Move</h2>
-    <div class="row">
-      <button id="orbit">Orbit</button>
-      <button id="walk" class="primary">Walk inside</button>
+<div class="progress"><span id="progress"></span></div>
+<header class="topbar">
+  <a class="brand" href="#hero"><img src="logo.webp" alt="" /> VIA LIBERA</a>
+  <nav class="links">
+    <a href="#today">Today</a><a href="#live">Live map</a><a href="#how">How</a>
+    <a href="#tabpfn">Why TabPFN</a><a href="#results">Results</a>
+    <a class="pill" id="enter-top" href="factory.html">▶ Enter the factory</a>
+  </nav>
+</header>
+<nav class="rail" id="rail" aria-label="Chapters"></nav>
+
+<main>
+  <section id="hero" class="hero" data-title="Via Libera">
+    <video id="hero-video" autoplay muted loop playsinline></video>
+    <div class="hero-shade"></div>
+    <div class="hero-text">
+      <img class="hero-logo" src="logo.webp" alt="Via Libera" />
+      <p class="kicker">Berlin AIxRobotics · Prior Labs track</p>
+      <h1>A gas leak. 300 people.<br /><span class="grad">Everyone gets their own way out.</span></h1>
+      <p class="sub">Find the leak, predict the gas, route every person around it, updated as the gas moves.
+        Three TabPFN models, no training, no real leak data needed.</p>
+      <div class="cta"><a class="pill big" id="enter-hero" href="factory.html">▶ Enter the factory</a>
+        <a class="pill ghost big" href="#live">Watch the live map</a></div>
     </div>
-    <h2>Views</h2>
-    <div class="row">
-      <button id="view-overview">Overview <kbd>1</kbd></button>
-      <button id="view-top">Top <kbd>2</kbd></button>
-      <button id="view-inside">Inside</button>
+  </section>
+
+  <section id="setting" class="chapter" data-title="1 · The setting">
+    <p class="kicker">1 · The setting</p>
+    <h2>Gas pipes, machines, people, and a few detectors.</h2>
+    <div class="cols">
+      <div>
+        <p>A factory runs gas over head-height racks and down to every machine. When a fitting
+          fails, hydrogen rises, propane sinks, the ventilation carries it, and within a minute a
+          cloud sits between people and the doors.</p>
+        <div class="meters">
+          <div class="meter"><b data-count="300">0</b><span>people in the hall</span></div>
+          <div class="meter"><b data-count="5" data-unit=" s">0</b><span>between detector readings</span></div>
+          <div class="meter"><b data-count="9" data-unit=" m">0</b><span>hall height, gas in 3D</span></div>
+        </div>
+      </div>
+      <figure><img src="/figures/shapes/plants.png" alt="Plants" loading="lazy" /><figcaption>Every plant shape we test: exits (green), detectors, pipes, robot lanes.</figcaption></figure>
     </div>
-    <h2>Go to</h2>
-    <select id="goto"><option value="">machine or exit...</option></select>
-    <h2>Layers</h2>
-    <label class="chk"><input type="checkbox" id="show-walls" /> Full-height walls</label>
-    <label class="chk"><input type="checkbox" id="show-frame" checked /> Roof frame and lights</label>
-    <label class="chk"><input type="checkbox" id="show-roof" /> Roof</label>
-    <label class="chk"><input type="checkbox" id="show-people" checked /> Workers</label>
-    <label class="chk"><input type="checkbox" id="show-overhead" checked /> Crane, ducts, sprinklers</label>
-    <label class="chk"><input type="checkbox" id="show-pipes" checked /> Gas pipes</label>
-    <label class="chk"><input type="checkbox" id="show-labels" checked /> Labels</label>
-    <label class="chk"><input type="checkbox" id="show-grid" /> Planner grid (solid cells)</label>
-    <label class="chk"><input type="checkbox" id="high-quality" /> High quality (ambient occlusion)</label>
-    <label class="chk"><input type="checkbox" id="daylight" /> Daylight sky</label>
-  </div>
-  <canvas id="minimap" title="Click to fly there"></canvas>
-  <div id="walkhelp" hidden><kbd>W S</kbd> walk &middot; <kbd>A D</kbd> step aside &middot; <kbd>Q E</kbd> / <kbd>&larr; &rarr;</kbd> turn &middot; <kbd>Shift</kbd> run &middot; mouse look (or drag) &middot;
-    <kbd>O</kbd> back to orbit &middot; walls and machines are solid</div>
-  <button id="resume" hidden>Click to lock the mouse &middot; or drag to look &middot; <kbd>O</kbd> back to orbit</button>
-  <div id="crosshair" hidden></div>
-  <script type="module" src="main.js"></script>
+  </section>
+
+  <section id="today" class="chapter" data-title="2 · Today">
+    <p class="kicker">2 · Today: the shortest path to the nearest exit</p>
+    <h2>Green signs point to the nearest door, even when it is inside the cloud.</h2>
+    <p>Evacuation plans are fixed: the shortest path (Dijkstra) to the nearest exit, printed on the
+      wall. They ignore where the gas is. Same leaks, same people, 15 test plants (5 known, 10 never seen):</p>
+    <table class="compare">
+      <thead><tr><th></th><th>Shortest path<br /><small>fixed signs, gas ignored</small></th><th>Via Libera</th><th>change</th></tr></thead>
+      <tbody>
+        <tr><td>average time in gas per person</td><td>0.50 s</td><td><b>0.09 s</b></td><td class="good">−83 %</td></tr>
+        <tr><td>worst 5 % of people (95th percentile, 9 plants)</td><td>3.8 s</td><td><b>0.6 s</b></td><td class="good">−84 %</td></tr>
+        <tr><td>people who breathe gas at all</td><td>5.0 %</td><td><b>1.8 %</b></td><td class="good">−64 %</td></tr>
+        <tr><td>worst-off person (demo leak)</td><td>24 s</td><td><b>2 s</b></td><td class="good">−92 %</td></tr>
+        <tr><td>time until 95 % are out (9 plants)</td><td>42 s</td><td><b>41 s</b></td><td>no slower</td></tr>
+      </tbody>
+    </table>
+    <p class="note">On the 10 plants the models had never seen: 0.63 s → 0.06 s per person (−90 %), as good as perfect knowledge of the gas. Cloud TabPFN, 3D gas, alarm from noisy detectors, one leak per plant.
+      Source: <code>docs/results/final-table.md</code>.</p>
+  </section>
+
+  <section id="live" class="chapter wide" data-title="3 · Live map">
+    <p class="kicker">3 · Via Libera, live</p>
+    <h2>Click anyone. See the three ways out, as they walk.</h2>
+    <div class="live">
+      <div class="live-map"><canvas id="map"></canvas>
+        <div class="live-bar"><button id="play" class="pill">▶ Play</button>
+          <input type="range" id="time" min="0" max="100" step="0.1" value="0" />
+          <span id="clock">0 s</span></div></div>
+      <aside class="live-side">
+        <div class="legend">
+          <div><i style="background:#1baf7a"></i>Via Libera: replanned at every model update</div>
+          <div><i style="background:#eda100"></i>planned once at the alarm</div>
+          <div><i style="background:#e34948"></i>today: shortest path to the nearest exit</div>
+          <div><i style="background:#d628d2"></i>toxic gas &nbsp;<i style="background:#e61e32;opacity:.6"></i>predicted danger &nbsp;<i class="ring"></i>leak guess</div>
+        </div>
+        <div id="person" class="person">Click a person on the map.</div>
+        <canvas id="pchart" width="380" height="150"></canvas>
+        <div id="status" class="status"></div>
+        <a class="pill" id="enter-live" href="factory.html">▶ See it in 3D</a>
+      </aside>
+    </div>
+  </section>
+
+  <section id="how" class="chapter" data-title="4 · How">
+    <p class="kicker">4 · How: three steps, each a TabPFN model</p>
+    <h2>From a few noisy detectors to a route for every person, every 15 seconds.</h2>
+    <div class="steps">
+      <div class="step"><span class="n">1</span><h3>Find the leak</h3>
+        <p>Rayan's locator reads every detector, masts included, and returns where the leak is,
+          how strong, and how high.</p><p class="vs">Usual: triangulate on the strongest detector.</p>
+        <img src="/figures/rayan/height3d-3-tabpfn-vs-knn.png" alt="" loading="lazy" /></div>
+      <div class="step"><span class="n">2</span><h3>Predict the gas</h3>
+        <p>Ahmad's hazard model predicts, for every spot in the hall, the chance it turns toxic or
+          flammable in the next minute.</p><p class="vs">Usual: CFD, minutes per run, too slow to react.</p>
+        <img src="/figures/ahmad/08-hazard-3d.png" alt="" loading="lazy" /></div>
+      <div class="step"><span class="n">3</span><h3>Route everyone</h3>
+        <p>Steven's planner gives each person a way out around the predicted gas and balances the
+          doors so nobody queues in the cloud.</p><p class="vs">Usual: shortest path to the nearest sign.</p>
+        <img src="/figures/steven/05-crowd-ladder.png" alt="" loading="lazy" /></div>
+    </div>
+  </section>
+
+  <section id="3d" class="chapter" data-title="5 · In 3D">
+    <p class="kicker">5 · Scaling to three dimensions</p>
+    <h2>Light gas rises, heavy gas sinks. So the detectors climb the pipes.</h2>
+    <div class="cols">
+      <div><p>Every vertical pipe gets a mast of three detectors. The gas is simulated in 3D,
+        calibrated on real plume measurements, and people breathe what is between 0.5 and 2 m.</p>
+        <div class="meters">
+          <div class="meter"><b data-count="0.6" data-dec="1" data-unit=" m">0</b><span>leak position error, unseen plants</span></div>
+          <div class="meter"><b data-count="0.58" data-dec="2" data-unit=" m">0</b><span>leak height error</span></div>
+        </div>
+        <a class="pill" id="enter-3d" href="factory.html">▶ Enter the factory</a></div>
+      <figure><img src="/figures/3d-study/verdict.png" alt="" loading="lazy" /><figcaption>Simulation vs real data: where each workflow works.</figcaption></figure>
+    </div>
+  </section>
+
+  <section id="tabpfn" class="chapter" data-title="6 · Why TabPFN">
+    <p class="kicker">6 · Why TabPFN</p>
+    <h2>Finds the leak 3.5× closer, no training, and the physics behind it is cheap.</h2>
+    <p>Same plants, same leaks, a classic k-NN in TabPFN's place: TabPFN puts the leak at 0.63 m
+      (k-NN 2.20 m) and its height at 0.63 m (k-NN 1.63 m). Its hazard map raises no false alarms
+      but covers less of the harmful air than k-NN's broader map (26 % vs 76 %): widening it is
+      our next step.</p>
+    <div class="meters">
+      <div class="meter"><b data-count="3.5" data-dec="1" data-unit="×">0</b><span>closer to the leak than k-NN in the 3D factory</span></div>
+      <div class="meter"><b data-count="41" data-unit=" %">0</b><span>smaller leak error than k-NN on real data (0.38 vs 0.64 m)</span></div>
+      <div class="meter"><b data-count="0" data-unit=" s">0</b><span>training: it reads the table in context</span></div>
+      <div class="meter"><b data-count="8" data-unit=" min">0</b><span>to simulate a new plant (CFD: 5.2 h)</span></div>
+    </div>
+    <div class="figs">
+      <figure><img src="/figures/final/3-accuracy-real.png" alt="" loading="lazy" /><figcaption>Real gas measurements: TabPFN vs k-NN.</figcaption></figure>
+      <figure><img src="/figures/final/2-accuracy-factory.png" alt="" loading="lazy" /><figcaption>3D factory: TabPFN vs k-NN, per plant.</figcaption></figure>
+      <figure><img src="/figures/final/4-compute.png" alt="" loading="lazy" /><figcaption>Training data and latency.</figcaption></figure>
+      <figure><img src="/figures/final/1-exposure.png" alt="" loading="lazy" /><figcaption>Exposure by method, same leaks and people.</figcaption></figure>
+    </div>
+  </section>
+
+  <section id="results" class="chapter" data-title="7 · Results">
+    <p class="kicker">7 · Results</p>
+    <h2>Less gas, same speed, on layouts it has never seen.</h2>
+    <div class="meters big">
+      <div class="meter"><b data-count="-83" data-unit=" %">0</b><span>time in gas per person (15 plants)</span></div>
+      <div class="meter"><b data-count="-90" data-unit=" %">0</b><span>on 10 plants never seen</span></div>
+      <div class="meter"><b data-count="-64" data-unit=" %">0</b><span>people exposed</span></div>
+      <div class="meter"><b data-count="5" data-unit=" s">0</b><span>to the alarm, from noisy detectors</span></div>
+    </div>
+  </section>
+
+  <section id="next" class="chapter" data-title="8 · Next">
+    <p class="kicker">8 · Next</p>
+    <h2>Where it goes from here.</h2>
+    <div class="cols">
+      <ul class="next">
+        <li>Live replanning when the gas moves fast (updates every 5 s, the hard case).</li>
+        <li>Hazard model trained near the plume: catch more of the harmful air.</li>
+        <li>Updates under 15 s on large halls (today 33 s): fewer forecast times, a coarser grid far from the leak.</li>
+        <li>Tell people how to move: stay low for light gas, stay high for heavy gas.</li>
+        <li>Real sites: ventilation layouts, robots as mobile detectors, phones and signs as the display.</li>
+      </ul>
+      <figure><img src="/figures/final/5-stress.png" alt="" loading="lazy" /><figcaption>The hard case: low leaks near people.</figcaption></figure>
+    </div>
+  </section>
+  <footer>Via Libera · Steven, Rayan, Ahmad · TabPFN by Prior Labs</footer>
+</main>
+<script type="module" src="story.js"></script>
 </body>
 </html>

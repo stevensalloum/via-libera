@@ -56,7 +56,7 @@ SECTIONS = (
     ("6 · Why TabPFN", [
         ("final", "3-accuracy-real.png", "Real gas data: TabPFN vs a classic k-NN."),
         ("final", "2-accuracy-factory.png", "3D factory: TabPFN vs k-NN, per plant."),
-        ("final", "4-compute.png", "No training, cheap physics, fast updates."),
+        ("final", "4-compute.png", "No training, cheap physics; update latency still above 15 s."),
         ("shapes", "locator.png", "Leak position error on unseen plants."),
     ]),
     ("7 · Next", [
