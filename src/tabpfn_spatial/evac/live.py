@@ -268,8 +268,8 @@ def _phase(t: float, alarm: bool, running: Cycle | None, landed: list, max_runs:
     if running is not None:
         n = running.index + 1
         if t < running.t_start + running.locate_s:
-            return f"run {n}: Rayan's model locating the leak ({running.locate_s:.1f} s)"
-        return f"run {n}: Ahmad's model forecasting the hazard ({running.predict_s:.1f} s)"
+            return f"run {n}: source model locating the leak ({running.locate_s:.1f} s)"
+        return f"run {n}: hazard model forecasting the gas ({running.predict_s:.1f} s)"
     if not landed:
         return "alarm: walking to the nearest exit"
     if len(landed) >= max_runs:

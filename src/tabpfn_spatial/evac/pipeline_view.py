@@ -97,7 +97,7 @@ def compute(
             rayan = f"leak {c.source_error_m:.1f} m off, size {c.rate_est:.2f} (true {sc.rate:.2f})"
             log(
                 f"run {c.index + 1}: readings 0-{c.t_start:.0f} s ({c.samples} per sensor) | "
-                f"Rayan {c.locate_s:.2f} s: {rayan} | Ahmad {c.predict_s:.2f} s | "
+                f"source {c.locate_s:.2f} s: {rayan} | hazard {c.predict_s:.2f} s | "
                 f"route lands at {c.t_land:.0f} s -> exit E{w.exit_index}"
             )
             seen = len(fr.cycles)
@@ -211,12 +211,17 @@ def draw(fig, axes, f: Factory, sc: Scenario, frames: list[PipelineFrame], k: in
             label="earlier routes of the replanned person",
         ),
         Line2D([], [], c="white", lw=1.4, label="truly harmful now"),
-        Line2D([], [], c="red", ls="--", lw=1.4, label="Ahmad: harmful in 30 s"),
-        Line2D([], [], c="cyan", marker="o", ls="", label="Rayan's best guess (star = true leak)"),
+        Line2D([], [], c="red", ls="--", lw=1.4, label="forecast: harmful in 30 s"),
+        Line2D([], [], c="cyan", marker="o", ls="", label="source estimate (star = true leak)"),
     ]
     leg = ax.legend(handles=handles, loc="lower left", fontsize=6.5, framealpha=0.85)
     leg.set_zorder(20)
-    ax.set_title(f"t = {fr.t:.0f} s  |  {fr.phase}", fontsize=10, loc="left")
+    phase = fr.phase.replace(
+        "Rayan's model locating", "source model locating"
+    ).replace(  # older runs
+        "Ahmad's model forecasting the hazard", "hazard model forecasting the gas"
+    )
+    ax.set_title(f"t = {fr.t:.0f} s  |  {phase}", fontsize=10, loc="left")
 
     last = fr.cycles[-1] if fr.cycles else None
     _plant(src, f, labels=False)
@@ -224,11 +229,11 @@ def draw(fig, axes, f: Factory, sc: Scenario, frames: list[PipelineFrame], k: in
         p = np.ma.masked_where(f.walls, np.maximum(last.source.prob, 1e-5))
         src.imshow(p, origin="lower", extent=ext, cmap="magma", norm=LogNorm(1e-4, 1))
         src.scatter(*sc.source, marker="*", s=120, c="cyan", edgecolors="k", zorder=7)
-        title = f"Rayan, run {last.index + 1}: where is the leak?\n"
+        title = f"Source model, run {last.index + 1}: where is the leak?\n"
         title += f"{last.source_error_m:.1f} m off, size {last.rate_est:.2f} (true {sc.rate:.2f})"
         src.set_title(title, fontsize=8)
     else:
-        src.set_title("Rayan: waiting for the alarm", fontsize=8)
+        src.set_title("Source model: waiting for the alarm", fontsize=8)
     for a, ahead, name in ((d0, 0, "now"), (d30, 30, "+30 s"), (d60, 60, "+60 s")):
         _plant(a, f, labels=False)
         m = _danger_at(fr, fr.t + ahead)
@@ -241,7 +246,7 @@ def draw(fig, axes, f: Factory, sc: Scenario, frames: list[PipelineFrame], k: in
                 vmin=0,
                 vmax=1,
             )
-        a.set_title(f"Ahmad: P(harm) {name}", fontsize=8)
+        a.set_title(f"Hazard forecast: P(harm) {name}", fontsize=8)
 
     tl.set_xlim(0, t_max)
     tl.set_ylim(-0.6, max(len(frames[-1].cycles), 1) - 0.4)
@@ -269,7 +274,7 @@ def draw(fig, axes, f: Factory, sc: Scenario, frames: list[PipelineFrame], k: in
     tl.axvline(fr.t, c="#555", lw=1.5)
     tl.set_yticks([])
     tl.set_xlabel(
-        "seconds since the leak (dotted: alarm). Cyan = Rayan's model, red = Ahmad's "
+        "seconds since the leak (dotted: alarm). Cyan = source model, red = hazard "
         "model; each run starts when the last route has landed",
         fontsize=8,
     )
@@ -496,7 +501,7 @@ def save_video(
     writer = FFMpegWriter(fps=fps, bitrate=4000) if path.suffix == ".mp4" else PillowWriter(fps=fps)
     fig, axes = figure(f)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with writer.saving(fig, str(path), dpi=90 if path.suffix == ".mp4" else 60):
+    with writer.saving(fig, str(path), dpi=140 if path.suffix == ".mp4" else 60):
         for k in range(end + 1):
             draw(fig, axes, f, sc, frames, k, t_max)
             writer.grab_frame()

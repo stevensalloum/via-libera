@@ -254,13 +254,14 @@ def save_gif(f: Factory, cfg: Config, path: Path, every: int = 2, fps: int = 10)
     import matplotlib
 
     matplotlib.use("Agg")
-    from matplotlib.animation import PillowWriter
+    from matplotlib.animation import FFMpegWriter, PillowWriter
 
     view = LiveView(f, cfg)
     view.fig.set_size_inches(12, 5.8)
-    writer = PillowWriter(fps=fps)
+    mp4 = path.suffix == ".mp4"  # sharp video for presentations; GIF otherwise
+    writer = FFMpegWriter(fps=fps, bitrate=3000) if mp4 else PillowWriter(fps=fps)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with writer.saving(view.fig, str(path), dpi=70):
+    with writer.saving(view.fig, str(path), dpi=150 if mp4 else 70):
         for k in range(int(cfg.t_max) + 1):
             view.tick()
             if k % every == 0:
@@ -344,7 +345,7 @@ def main() -> int:
     p.add_argument("--source", choices=("oracle", "centroid"), default="oracle")
     p.add_argument("--sigma", type=float, default=3.0, help="oracle source error (m)")
     p.add_argument("--hazard", choices=("forward", "oracle"), default="forward")
-    p.add_argument("--gif", type=Path, help="record a GIF instead of opening a window")
+    p.add_argument("--gif", type=Path, help="record a GIF (or .mp4) instead of opening a window")
     p.add_argument("--story", type=Path, help="write the four-moment still instead")
     p.add_argument("--compare", type=int, metavar="N", help="score the policies on N leaks")
     a = p.parse_args()

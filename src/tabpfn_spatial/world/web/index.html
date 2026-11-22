@@ -27,7 +27,7 @@
 
   <!-- 2 · vision ----------------------------------------------------------------------- -->
   <section id="vision" class="scene bleed" data-title="Vision">
-    <iframe id="vision-frame" title="Factory" data-src="factory.html?embed=1"></iframe>
+    <video class="bg" src="/media/3d-B-ccrp.mp4" autoplay muted loop playsinline></video>
     <div class="shade-left"></div>
     <div class="over">
       <p class="kicker">Vision</p>
@@ -46,6 +46,7 @@
     <h2>Three models, one loop, every 15 s.</h2>
     <svg id="flowchart" viewBox="0 0 1200 360" role="img" aria-label="Pipeline"></svg>
     <p class="cap" id="flow-cap">Hover a block.</p>
+    <div class="flow-media"><figure class="media"><video src="/media/2d-pipeline-standard.mp4" muted loop playsinline preload="metadata"></video><figcaption>The loop with cloud TabPFN: the worker (left), the source map and the hazard forecast now, +30 s, +60 s (right), each model run on the timeline (bottom).</figcaption></figure></div>
   </section>
 
   <!-- 4 · source ----------------------------------------------------------------------- -->
@@ -62,10 +63,7 @@
           k-nearest neighbours on the same rows.</p>
         <div class="kpis"><div><b>0.7 m</b><span>TabPFN</span></div><div><b>2.5 m</b><span>k-NN</span></div><div><b>8.5 m</b><span>centroid</span></div></div>
       </div>
-      <div class="charts">
-        <div class="chart" id="c-source-err"></div>
-        <div class="chart small" id="c-source-size"></div>
-      </div>
+<div class="tabs" id="t-source"><nav><button data-tab="0" class=on>Accuracy</button><button data-tab="1">What the detectors see</button><button data-tab="2">Detector masts</button></nav><div class="panel"><div class="charts"><div class="chart" id="c-source-err"></div><div class="chart small" id="c-source-size"></div></div></div><div class="panel" hidden><figure class="media"><img src="/figures/rayan/height-1-data-methane.png" alt="" loading="lazy" /><figcaption>Simulated plumes and detector readings: concentration in plan and in height, readings over time per detector.</figcaption></figure></div><div class="panel" hidden><figure class="media"><img src="/figures/rayan/height3d-2-detection-methane.png" alt="" loading="lazy" /><figcaption>Leak height from detector masts on vertical pipes: error by layout and model.</figcaption></figure></div></div>
     </div>
   </section>
 
@@ -83,10 +81,7 @@
         <p><b>Baseline</b> · forward physics: the advection–diffusion model run from the estimated
           source.</p>
       </div>
-      <div class="charts">
-        <div class="chart" id="c-hazard-brier"></div>
-        <div class="chart small" id="c-hazard-roc"></div>
-      </div>
+<div class="tabs" id="t-hazard"><nav><button data-tab="0" class=on>Accuracy</button><button data-tab="1">Forecast maps</button><button data-tab="2">Sensor history</button></nav><div class="panel"><div class="charts"><div class="chart" id="c-hazard-brier"></div><div class="chart small" id="c-hazard-roc"></div></div></div><div class="panel" hidden><figure class="media"><video src="/media/2d-pipeline-wind_drift.mp4" muted loop playsinline preload="metadata"></video><figcaption>Drifting wind: the forecast maps (right) move with the gas; the dashed red line is the forecast harmful area in 30 s.</figcaption></figure></div><div class="panel" hidden><figure class="media"><img src="/figures/ahmad/02-sensor-history-cloud.png" alt="" loading="lazy" /><figcaption>Adding the sensor history to the forecast inputs, cloud TabPFN.</figcaption></figure></div></div>
     </div>
   </section>
 
@@ -103,7 +98,7 @@
         <p><b>Baselines</b> · today's plan: shortest path to the nearest exit, gas ignored;
           the same planner fed by baseline models; perfect knowledge (upper bound).</p>
       </div>
-      <div class="charts"><div class="chart" id="c-planner"></div></div>
+<div class="tabs" id="t-planner"><nav><button data-tab="0" class=on>Accuracy</button><button data-tab="1">One worker</button><button data-tab="2">Crowd</button></nav><div class="panel"><div class="charts"><div class="chart" id="c-planner"></div></div></div><div class="panel" hidden><figure class="media"><video src="/media/2d-one-person.mp4" muted loop playsinline preload="metadata"></video><figcaption>Same worker, three plans: green replanned every update, orange planned once at the alarm, red shortest path to the nearest exit (dose: 0.06 / 0.08 / 0.74).</figcaption></figure></div><div class="panel" hidden><figure class="media"><img src="/figures/steven/06-crowd-run.png" alt="" loading="lazy" /><figcaption>A whole crowd on the same leak: nearest exit, risk-aware and CCRP side by side.</figcaption></figure></div></div>
     </div>
   </section>
 
@@ -118,10 +113,7 @@
           the leak height. 9 plants, 4 never seen.</p>
         <div class="kpis"><div><b>3.5×</b><span>closer to the leak than k-NN</span></div><div><b>0.12 s</b><span>in gas per person (nearest exit 0.50 s)</span></div></div>
       </div>
-      <div class="charts">
-        <div class="chart" id="c-3d-skill"></div>
-        <div class="chart small" id="c-3d-exposure"></div>
-      </div>
+<div class="tabs" id="t-3d"><nav><button data-tab="0" class=on>Accuracy</button><button data-tab="1">Today vs Via Libera</button><button data-tab="2">Height of the gas</button></nav><div class="panel"><div class="charts"><div class="chart" id="c-3d-skill"></div><div class="chart small" id="c-3d-exposure"></div></div></div><div class="panel" hidden><div class="duo-vid"><figure class="media"><video src="/media/3d-B-nearest.mp4" muted loop playsinline preload="metadata"></video><figcaption>Today: shortest path to the nearest exit (magenta = in harmful gas).</figcaption></figure><figure class="media"><video src="/media/3d-B-ccrp.mp4" muted loop playsinline preload="metadata"></video><figcaption>Via Libera: routed around the forecast, same leak and people.</figcaption></figure></div></div><div class="panel" hidden><figure class="media"><img src="/figures/3d-study/heights.png" alt="" loading="lazy" /><figcaption>How far from a leak the gas density still decides its height (light rises, heavy sinks).</figcaption></figure></div></div>
     </div>
   </section>
 
