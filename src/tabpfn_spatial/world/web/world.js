@@ -5,6 +5,8 @@ import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import { envelope, exterior, interior, people } from "./details.js";
 import { tube } from "./geom.js";
 import { buildMachine } from "./machines.js";
+import { Agvs, HeightZone } from "./robots.js";
+import * as shell from "./shell.js";
 import { blockTexture, corrugatedTexture, floorTexture, signTexture } from "./textures.js";
 
 export { tube };
@@ -177,7 +179,19 @@ function pipes(scene, F) {
     s.position.copy(F.P(...j.split(",").map(Number), z));
     g.add(s);
   }
+  const c = scene.cell;
+  const outsideAt = (x, y) => {  // off the grid or an outside cell: the building's edge
+    const ix = Math.floor(x / c), iy = Math.floor(y / c);
+    if (ix < 0 || iy < 0 || iy >= scene.solid.length || ix >= scene.solid[0].length) return true;
+    return Boolean(scene.outside && scene.outside[iy][ix]);
+  };
   for (const [x, y] of scene.fittings) {
+    if ([[c, 0], [-c, 0], [0, c], [0, -c]].some(([dx, dy]) => outsideAt(x + dx, y + dy))) {
+      g.add(tube(F.P(x, y, 0.15), F.P(x, y, z), r * 1.15, gas));  // supply riser from the ground
+      const flange = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.12, 16), valveMat);
+      flange.position.copy(F.P(x, y, 1.2));
+      g.add(flange);
+    }
     const body = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.34, 16), valveMat);
     body.position.copy(F.P(x, y, z));
     g.add(body);
@@ -225,7 +239,8 @@ function sensors(scene, F) {
 
 // The planner's solid cells as a translucent red overlay (proof that 3D = model).
 function plannerGrid(scene, F) {
-  const solid = scene.solid.flatMap((row, iy) => row.map((v, ix) => (v ? [ix, iy] : null))).filter(Boolean);
+  const out = scene.outside;  // outside the building: solid too, but not drawn
+  const solid = scene.solid.flatMap((row, iy) => row.map((v, ix) => (v && !(out && out[iy][ix]) ? [ix, iy] : null))).filter(Boolean);
   const c = scene.cell;
   const mesh = new THREE.InstancedMesh(
     new THREE.BoxGeometry(c * 0.96, 0.12, c * 0.96),
@@ -249,13 +264,15 @@ export function buildWorld(scene) {
   const F = makeFrame(scene);
   const root = new THREE.Group();
   const labels = new THREE.Group();
+  const shaped = Boolean(scene.shaped);
+  const empty = () => new THREE.Group();
   const parts = {
-    floor: floor(scene, F),
-    outer: outerWalls(scene, F),
-    roof: roofFrame(scene, F),
-    shell: envelope(scene, F),
-    overhead: interior(scene, F),
-    yard: exterior(scene, F),
+    floor: shaped ? shell.floorAndYard(scene, F) : floor(scene, F),
+    outer: shaped ? shell.outerWalls(scene, F) : outerWalls(scene, F),
+    roof: shaped ? shell.roofs(scene, F) : roofFrame(scene, F),
+    shell: shaped ? { walls: empty(), roof: empty() } : envelope(scene, F),
+    overhead: shaped ? empty() : interior(scene, F),
+    yard: shaped ? empty() : exterior(scene, F),
     people: people(scene, F),
     inner: innerWalls(scene, F),
     machines: new THREE.Group(),
@@ -277,11 +294,13 @@ export function buildWorld(scene) {
     labels.add(l);
   });
   parts.outer.cladding.add(parts.shell.walls);
-  parts.roof.panels = parts.shell.roof;
+  if (!shaped) parts.roof.panels = parts.shell.roof;
+  parts.agvs = new Agvs(scene, F);
+  parts.zone = new HeightZone(F);
   parts.grid.visible = false;
   parts.roof.panels.visible = false;
   root.add(parts.floor, parts.yard, parts.outer.plinth, parts.outer.cladding, parts.outer.doors,
     parts.roof.frame, parts.roof.panels, parts.overhead, parts.inner, parts.machines, parts.pipes,
-    parts.sensors, parts.people, parts.grid, labels);
+    parts.sensors, parts.people, parts.grid, parts.agvs.group, parts.zone.group, labels);
   return { root, parts, F };
 }

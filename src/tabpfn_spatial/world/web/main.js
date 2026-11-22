@@ -79,7 +79,13 @@ const nav = new Navigator(camera, renderer.domElement, scene, F);
 const VIEWS = {
   overview: () => [F.P(-scene.width * 0.15, -scene.height * 0.55, span * 0.55), F.P(scene.width / 2, scene.height / 2, 0)],
   top: () => [F.P(scene.width / 2, scene.height / 2 - 0.01, span * 1.15), F.P(scene.width / 2, scene.height / 2, 0)],
-  inside: () => [F.P(scene.width * 0.1, scene.height * 0.15, 4.5), F.P(scene.width * 0.6, scene.height * 0.6, 2)],
+  inside: () => {
+    if (scene.agv_lanes && scene.agv_lanes.length) {  // an aisle: always open floor
+      const lane = scene.agv_lanes[0], a = lane[0], b = lane[Math.floor(lane.length / 4)];
+      return [F.P(a[0], a[1], 2.2), F.P(b[0], b[1], 1.8)];
+    }
+    return [F.P(scene.width * 0.1, scene.height * 0.15, 4.5), F.P(scene.width * 0.6, scene.height * 0.6, 2)];
+  },
 };
 const [p0, t0] = VIEWS.overview();
 camera.position.copy(p0);
@@ -88,10 +94,12 @@ nav.orbit.target.copy(t0);
 // ------------------------------------------------------------------ panel and keys --
 const $ = (id) => document.getElementById(id);
 $("info").innerHTML =
+  (scene.name ? `<b>${scene.name}</b> (${scene.gas}) &middot; ` : "") +
   `${scene.width} x ${scene.height} m &middot; ${scene.machines.length} machines ` +
   `(${scene.machines.filter((m) => m.hot).length} hot) &middot; ${scene.sensors.length} gas sensors &middot; ` +
   `${scene.exits.length} exits &middot; ${scene.leak_sites.length} leak sites on the gas pipes &middot; ` +
-  `${scene.people.length} workers`;
+  `${scene.people.length} workers` +
+  (scene.agv_lanes && scene.agv_lanes.length ? ` &middot; ${scene.agv_lanes.length * 2} AGVs` : "");
 for (const [id, fn] of Object.entries(VIEWS)) $(`view-${id}`).onclick = () => nav.flyTo(...fn());
 const goto = $("goto");
 scene.machines.forEach((m, i) => goto.add(new Option(`${m.name}${m.hot ? " (hot)" : ""}`, `m${i}`)));
@@ -216,6 +224,7 @@ renderer.setAnimationLoop(() => {
   frame++;
   nav.update(dt);
   animateMachines(parts.machines, clock.elapsedTime);
+  if (!replay) parts.agvs.drive(clock.elapsedTime);
   animateDetails(parts.overhead, clock.elapsedTime);
   if (frame % 6 === 0) cullLabels();
   if (replay) { replay.update(dt); if (frame % 3 === 0) refreshReplay(); }
