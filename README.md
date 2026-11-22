@@ -2,228 +2,115 @@
 
 # Via Libera
 
-**Find the leak, predict the gas, route everyone out.** When gas leaks in a factory, today's
-answer is a fixed green sign to the nearest exit, even when that exit is inside the cloud.
-Via Libera reads the gas detectors, locates the leak in 3D, predicts where the gas will be
-harmful, and gives every person their own way out around it, updated as the gas moves.
-Each step is a TabPFN model fitted in seconds on simulations of *that* plant: no training,
-no real leak data needed.
+**Find the leak. Forecast the hazard. Guide people to safer exits.**
 
-Built at the Berlin AIxRobotics Hackathon (Prior Labs track) by Steven, Rayan and Ahmad.
-The Python package is still called `tabpfn_spatial` (the project's working name).
+Via Libera is a factory evacuation prototype built for the Berlin AIxRobotics Hackathon,
+Prior Labs track. It uses gas detector readings to estimate a leak's location and height,
+forecast the spread of gas, and plan evacuation routes as conditions change. The source and
+hazard models use TabPFN with simulated examples generated for the plant; the route planner
+uses those predictions to account for risk and exit capacity.
 
-## Results (final 3D test, cloud TabPFN)
+This is a research prototype. The results below are simulated comparisons and limited tests on
+public gas datasets, not validation for use in an emergency.
 
-Same leaks, same people, 9 plants (5 known layouts, 4 never seen before), 3D gas, alarm from
-noisy detectors, models updated every 15 s ([table](docs/results/final-table.md)):
+## Try the demo
 
-| | known plants | unseen plants |
-|---|---|---|
-| seconds in harmful gas per person: nearest exit (today) | 0.23 s | 0.84 s |
-| ... Via Libera (CCRP + TabPFN) | **0.14 s** | **0.09 s** |
-| ... with perfect knowledge of the gas | 0.14 s | 0.01 s |
-| people exposed: nearest exit / Via Libera | 3.7 % / 2.3 % | 6.2 % / 2.4 % |
-| 95 % of people out: nearest exit / Via Libera | 41 s / 42 s | 43 s / 40 s |
-| leak position / height error (median) | 1.1 m / 0.95 m | 0.6 m / 0.58 m |
-
-With Rayan's 6 further unseen plants (15 plants, 10 never seen, one leak each): seconds in gas
-per person 0.50 s → **0.09 s (−83 %)**, on unseen plants 0.63 s → **0.06 s (−90 %)**, people
-exposed 5.0 % → **1.8 % (−64 %)**, as good as perfect knowledge of the gas.
-
-Against a classic k-NN in TabPFN's place (same 9 plants and leaks, `--backend baseline`):
-TabPFN locates the leak 3.5x closer (median 0.63 m vs 2.20 m; height 0.63 m vs 1.63 m). The
-k-NN hazard map is broader (catches 76 % of harmful cells vs 26 %, with more false alarms),
-which helps routing on unseen plants (0.02 s vs 0.09 s in gas per person; known plants: TabPFN
-0.14 s vs k-NN 0.21 s). Widening TabPFN's hazard map is the next step.
-
-On real gas measurements TabPFN locates the leak better than a classic k-NN on the same rows
-(Red:Vapor 0.38 m vs 0.64 m; SRGDM 0.83 vs 1.50 cells) and ranks hot zones at least as well
-(AUC 0.88 / 0.62 / 0.98 vs 0.88 / 0.60 / 0.94 on Red:Vapor, Örebro, UCI).
-Figures: [docs/figures/final](docs/figures/final).
-
-## Demo (for the presentation)
-
-**One command, nothing computed, no tokens:**
+Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv run via-libera              # the story page + live map, "Enter the factory" for 3D (saved cloud run)
+git clone https://github.com/stevensalloum/via-libera.git
+cd via-libera
+uv sync
+uv run via-libera
 ```
 
-The viewer loads Three.js from a CDN: have internet (or a phone hotspot) on the demo laptop.
-Other commands:
+The command opens the presentation and a saved 3D factory replay. It does not run inference or
+spend TabPFN credits. The 3D viewer loads Three.js from a CDN, so it needs an internet
+connection. Select **Enter the factory** to explore the replay, or run
+`uv run via-libera --list` to see the available saved runs.
+
+Some presentation tabs refer to video files under `demo/media/` that are not included in the
+repository. Check those assets on the presentation laptop before recording. See the
+[presentation guide](docs/presentation.md) for controls and the shot list.
+
+## Results
+
+In a 3D simulation study, the team compared routes for the same people and leaks across nine
+plants: five known layouts and four unseen layouts, with one leak per plant. The table compares
+nearest-exit routing with the capacity-constrained planner using TabPFN predictions.
+
+| Measure | Known plants: nearest / Via Libera | Unseen plants: nearest / Via Libera |
+|---|---:|---:|
+| Mean time in harmful gas per person | 0.23 / **0.14 s** | 0.84 / **0.09 s** |
+| People exposed | 3.7 / **2.3%** | 6.2 / **2.4%** |
+| Time until 95% have exited | 41 / 42 s | 43 / 40 s |
+
+![Simulated evacuation exposure comparison](docs/figures/final/1-exposure.png)
+
+The [full results table](docs/results/final-table.md) includes the perfect-information and
+k-NN comparisons and a further six unseen plants. These are small, simulated samples rather
+than evidence of real-world evacuation performance. In the nine-plant study, toxic hazard
+recall was 22% on known plants and 26% on unseen plants at the reported operating point;
+improving detection of hazardous cells is an important next step.
+
+The project also compares source estimation and hazard ranking on public gas datasets. The
+[recorded results](docs/figures/final/real_data_comparison.json) include Red:Vapor, SRGDM,
+Örebro and UCI; sample sizes are small and the Red:Vapor source comparison reports different
+sample counts for the two methods. See the [figures](docs/figures/final/) for details.
+
+## How it works
+
+1. **Locate:** detector histories and wind readings produce a distribution over leak locations,
+   along with estimates of release rate and height.
+2. **Forecast:** the hazard model estimates where gas will be harmful at future times.
+3. **Route:** evacuation planners use the forecast, plant geometry and exit capacity to compare
+   routes; the simulation updates plans as new readings arrive.
+
+The simulator, source and hazard estimators, and planners retain baseline implementations for
+comparison. See [the project brief](docs/brief.md), [results](docs/results/final-table.md) and
+the team's [development notes](docs/journey/).
+
+## Run and reproduce
 
 ```bash
-uv sync                                                   # once
-uv run via-libera --list                                  # saved demo runs (demo/)
-uv run world --replay --rung T --leak 500 --backend cloud # a new 3D run (about 1M tokens)
-uv run world --keep                                       # replay the last run again, free
-uv run world --replay --rung T --leak 500 --backend baseline  # offline, no tokens
-uv run evac-pipeline --models team --backend baseline     # the 2D view: one person, live
-uv run gallery Final                                      # every figure + video, in pitch order
-uv run evac-compare                                       # redraw the "why TabPFN" figures
+uv run pytest                             # test suite; no cloud calls
+uv run ruff check .                       # lint
+uv run ruff format --check .              # formatting
+uv run world                              # interactive 3D factory
+uv run evac-pipeline --models team --backend baseline  # offline 2D view
+uv run sync-check                         # check interfaces between components
 ```
 
-In the 3D viewer (http://127.0.0.1:8770):
-- **Play**, speed, and which crowd to show (nearest exit, CCRP planned once / replanned live);
-- **click a person**: their three paths drawn live (green replanned, orange planned once, red
-  nearest exit), seconds in gas, and the gas they breathe over time;
-- **Follow** (camera behind them) or **Person view** (through their eyes, green route ahead);
-- **cinematic camera** + **Record video** (saved into the run's `videos/` folder);
-- the map (bottom right): toxic gas, predicted danger, leak guesses, alarming detectors,
-  people, the selected person's paths; click it to fly there;
-- **Walk inside**: W/S walk, A/D step aside, Q/E or the arrows turn, Shift runs.
-
-Reproduce the final results (cloud credits: about 1M tokens per plant and leak):
+To reproduce the final study with cloud inference:
 
 ```bash
-uv run evac-final --backend cloud --leaks 1 --unseen 1 --n-train 100   # 9 plants
-uv run evac-final --backend baseline --leaks 1 --unseen 1 --n-train 100  # k-NN, offline
-uv run evac-final --backend cloud --stress --leaks 1 --unseen 1 --n-train 100  # hard case
-uv run evac-compare                                       # figures -> docs/figures/final
+uv run evac-final --backend cloud --leaks 1 --unseen 1 --n-train 100
 ```
 
-Full presentation guide (pitch timing, shot list, backups): [docs/presentation.md](docs/presentation.md).
+This is a paid cloud run, estimated at about 1 million tokens per plant and leak in the team's
+measurements. The saved demo does not need a key; cloud runs require a `TABPFN_TOKEN` in a
+local `.env` file copied from `.env.example`. Run `uv run tabpfn-check` to check the key and
+obtain cost quotes. For the offline k-NN comparison, use `--backend baseline` instead of
+`--backend cloud`. Local TabPFN is available with `uv sync --extra local` and requires model
+downloads and appropriate hardware.
 
-### More views
+## Repository
 
-| Command | What it shows |
+The Python package is named `tabpfn_spatial`, the project's working name.
+
+| Path | Contents |
 |---|---|
-| `uv run world` | The 3D factory: orbit, fly to machines, walk inside |
-| `uv run world --layout L-plant` | A shaped plant (`L-plant`, `U-plant`, `T-plant`, `campus`), or an unseen one: `--layout U --seed 7` |
-| `uv run sim-viz` | The plant: machines, gas pipes, sensors, exits; gas spreading over time |
-| `uv run evac-live` | One person evacuated live from the detector alarm (click to move them) |
-| `uv run evac-crowd-live --rung B` | A whole crowd, three planners side by side |
-| `uv run evac-shapes` | The unseen-shapes study (2D) |
-| `uv run sync-check` | Do the source, hazard and evacuation parts agree on time, space, units? |
-
-How each part evolved, with figures: `docs/journey/`.
+| `src/tabpfn_spatial/sim/` | Factory layouts, gas simulation and scenarios |
+| `src/tabpfn_spatial/source/` | Leak location, release rate and height estimation |
+| `src/tabpfn_spatial/hazard/` | Gas and hazard forecasts |
+| `src/tabpfn_spatial/evac/` | Evacuation planners and studies |
+| `src/tabpfn_spatial/world/` | 3D viewer and presentation |
+| `tests/` | Offline tests for the simulator and models |
+| `docs/` | Methods, results, figures and team notes |
 
 ## Team
 
-- Steven ([@stevensalloum](https://github.com/stevensalloum)), integrator
-- Rayan ([@RayanElKhoury](https://github.com/RayanElKhoury))
-- Ahmad ([@Asorus](https://github.com/Asorus))
-
-## Setup (once per laptop)
-
-Requires Python 3.12+. Recommended: [uv](https://docs.astral.sh/uv/) (it installs Python 3.12
-itself if missing). Clone outside iCloud / OneDrive folders.
-
-```bash
-gh repo clone stevensalloum/via-libera
-cd via-libera
-uv sync                       # creates .venv from uv.lock
-uv run pytest                 # expect all tests to pass
-cp .env.example .env          # Windows: copy .env.example .env ; fill in keys, never commit
-```
-
-Without uv (plain pip), use `requirements.txt`, which mirrors `uv.lock`:
-
-```bash
-python3.12 -m venv .venv
-source .venv/bin/activate     # Windows PowerShell: .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-pip install -e . --no-deps
-pytest
-```
-
-## TabPFN API key
-
-Each person puts their own key in `.env` as `TABPFN_TOKEN=...` (never commit it), then:
-
-```bash
-uv run tabpfn-check           # verifies the key, shows usage and free cost quotes
-```
-
-Costs (measured 2026-11-21, TabPFN-3.5, 8 estimators): **10,000 tokens minimum per call**,
-growing mainly with test rows (1k train + 100k test x 10 cols = 26.6k; 1M test rows = 2M).
-Batch your queries into few large `predict` calls; quote first with
-`tabpfn_client.estimate_cost` (free, sends only shapes).
-
-## Shared starter (`tabpfn_spatial.core`)
-
-Every application builds on the same pieces:
-
-```python
-from tabpfn_spatial.core.grid import Grid2D
-from tabpfn_spatial.core.metrics import coverage, crps
-from tabpfn_spatial.core.models import make_regressor
-
-model = make_regressor("cloud")  # "local", "baseline" or "auto"
-dist = model.fit(X_readings, y_readings).predict_dist(Grid2D((0, 10), (0, 10), 60, 60).points())
-dist.mean, dist.median, dist.width(0.9)  # per-cell prediction and uncertainty
-```
-
-| Module | What it gives you |
-|---|---|
-| `dist` | `QuantileDist`: quantiles, `interval(0.9)`, `width`, mean, mode |
-| `models` | `make_regressor` / `make_classifier` over TabPFN cloud, TabPFN local, k-NN baselines |
-| `budget` | `CostGuard`: free quote before every cloud call, refuses calls above 200k tokens |
-| `grid` | `Grid2D`: a whole map as one batched query, and back to an image |
-| `metrics` | `crps`, `coverage`, `ece`: the numbers to pitch |
-| `viz` | `plot_map`: truth / mean / uncertainty heatmaps |
-| `example` | `uv run spatial-example --backend cloud`: full map from 200 sparse readings |
-
-Local TabPFN (PyTorch, GPU if available, multi-GB download): `uv sync --extra local`.
-
-## Daily flow
-
-1. Start of every work block: `git switch main && git pull`
-2. Pick your GitHub Issue (`gh issue list --assignee @me`) and branch from fresh main:
-   `git switch -c feat/<topic>`
-3. Test first, then code. Before pushing:
-   `uv run ruff check . && uv run ruff format --check . && uv run pytest`
-4. Update `docs/status/<name>.md`, commit (`feat: ...`), push, then `gh pr create`
-   and fill in the template: `Closes #<issue>`, What, Why, How tested. Agents pass it
-   with `--title` and `--body`; do not use `--fill`, which drops the template.
-5. After Steven merges: `git switch main && git pull && git branch -d <branch>`
-
-## Checks
-
-```bash
-uv run pytest                 # tests
-uv run ruff check .           # lint
-uv run ruff format .          # format
-```
-
-## Dependencies
-
-Add or change them only in a PR the integrator reviews:
-
-```bash
-uv add <package>              # updates pyproject.toml and uv.lock
-uv export --format requirements-txt --no-hashes --group dev --no-emit-project --quiet -o requirements.txt
-```
-
-CI fails if `requirements.txt` is out of sync with `uv.lock`.
-
-## Repository layout
-
-```
-src/tabpfn_spatial/
-  sim/          the plants (2D grid + 3D: plant3d, gas3d), gas physics, scenarios  (Steven)
-  source/       find the leak: position, size, height (TabPFN)                     (Rayan)
-  hazard/       predict the gas: toxic / fire probability, 2D and 3D (TabPFN)      (Ahmad)
-  evac/         route everyone: crowd, planners (nearest, risk, CCRP), the loop,
-                final 3D study (final_study, final_compare)                        (Steven)
-  study3d/      real data vs simulation, physics ladder up to CFD (3D study)
-  world/        the 3D viewer (Three.js) and its server
-  core/         TabPFN backends (cloud / k-NN stand-in), budget guard, metrics
-  contracts.py  the interfaces between the three steps
-tests/          mirrors src/ (runs in CI on every PR)
-docs/
-  brand/        the Via Libera logo
-  results/      final tables (the numbers behind the pitch)
-  figures/      final/ (pitch figures) · shapes/ · 3d-study/ · steven/ · rayan/ · ahmad/
-  research/     final-factory.md (3D inputs), unseen-shapes.md, 3D study notes
-  journey/      how each part evolved;  status/  per-person status
-outputs/        (git-ignored) runs: final/, world/ (replays + videos), pipeline/ (2D)
-milestones/     (git-ignored) galleries from `uv run gallery <name>`
-```
-
-Contribution rules (branches, PRs, ownership, code style) are in [AGENTS.md](AGENTS.md).
-
-## Note on tooling
-
-We used AI coding assistants (Claude Code, Codex) while building this project. All code was
-reviewed, tested and integrated by the team.
+Built by [Steven](https://github.com/stevensalloum),
+[Rayan](https://github.com/RayanElKhoury) and [Ahmad](https://github.com/Asorus).
+The team used AI coding assistants during development; the code was reviewed, tested and
+integrated by the team.

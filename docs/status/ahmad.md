@@ -4,6 +4,10 @@ Only Ahmad's agent edits this file. Update it before every PR.
 
 ## Doing
 
+- Submission review: README revised for a clear demo, reported study limits and
+  cloud costs. The repository is private, and the presentation references videos
+  under `demo/media/` that are not tracked; the integrator should check submission
+  access and supply the media on the presentation laptop.
 - Prepare the alarm-alignment and optional diffusivity work for review; previous
   simulations are historical and have not been rerun with the changed alarm.
 - Review the six-cycle alarm-to-route timing probe and live integration
@@ -35,6 +39,10 @@ Only Ahmad's agent edits this file. Update it before every PR.
 
 ## Done
 
+- Submission checks on main `a5d6699`: GitHub Actions passed; locally 385 tests
+  passed and 3 skipped (including an existing untracked test), Ruff lint and format
+  passed, and the story, factory page and saved replay data returned HTTP 200.
+  The referenced hero video returned 404. No cloud calls or new model metrics.
 - Offline compatibility smoke check on Steven's L, U, T and campus templates:
   Rayan's source interface and the optional varied-spread hazard context returned
   finite, correctly shaped 2D probability maps on all four. Two hazard-context
