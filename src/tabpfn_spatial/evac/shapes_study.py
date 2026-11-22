@@ -36,7 +36,7 @@ from tabpfn_spatial.sim.robots import blocked_factory
 
 FIRST_SEED = 100  # templates use seeds 1-4: every plant here is unseen
 M2_PER_PERSON = 20.0
-T_MAX = 240.0  # s; evacuations of these plants finish in 1-2 min
+T_MAX = 180.0  # s; evacuations of these plants finish in 1-2 min (fewer cloud calls)
 UPDATE_S = 15.0
 SIZES = {"L": (90.0, 70.0), "U": (100.0, 70.0), "T": (90.0, 80.0), "campus": (120.0, 70.0)}
 METRICS = ("harm_s_mean", "harm_s_p95", "exposed_pct", "out_95_s", "still_inside")
@@ -88,19 +88,60 @@ def job(args: tuple[str, int, int, str, str]) -> list[dict]:
             for p in PLANNERS]  # fmt: skip
 
 
-def run_study(plants: int, leaks: int, tabpfn_leaks: int, backend: str, workers: int) -> list[dict]:
-    """All jobs; the slow (tabpfn) ones first so the pool stays busy."""
+def _key(job_args: tuple) -> str:
+    return "|".join(map(str, job_args))
+
+
+def _safe_job(args: tuple) -> tuple[tuple, list[dict] | str]:
+    """``job`` that returns the error text instead of raising.
+
+    One bad run must not stop the study.
+    """
+    try:
+        return args, job(args)
+    except Exception as err:
+        return args, f"{type(err).__name__}: {err}"
+
+
+def run_study(plants: int, leaks: int, tabpfn_leaks: int, backend: str, workers: int,
+              log: Path, cloud_workers: int = 2) -> list[dict]:  # fmt: skip
+    """All jobs, each saved to ``log`` (JSON lines) as soon as it finishes.
+
+    Runs already in ``log`` are skipped, so a restart never repeats (or re-pays for) a run.
+
+    Cloud runs use ``cloud_workers`` processes: the TabPFN cloud allows 60 predict
+    requests per minute per account (rate-limited calls are retried, ``core.models``).
+    """
     specs = [(k, FIRST_SEED + i) for k in KINDS for i in range(plants)]
-    jobs = [(k, s, 1000 + j, "tabpfn", backend) for k, s in specs for j in range(tabpfn_leaks)]
-    jobs += [(k, s, 1000 + j, m, backend) for m in ("perfect", "baseline") for k, s in specs
-             for j in range(leaks)]  # fmt: skip
-    rows: list[dict] = []
-    with ProcessPoolExecutor(workers) as pool:
-        for k, part in enumerate(pool.map(job, jobs)):
-            rows += part
-            if (k + 1) % 10 == 0 or k + 1 == len(jobs):
-                print(f"{k + 1}/{len(jobs)} runs", flush=True)
-    return rows
+    team = [(k, s, 1000 + j, "tabpfn", backend) for k, s in specs for j in range(tabpfn_leaks)]
+    sims = [(k, s, 1000 + j, m, backend) for m in ("perfect", "baseline") for k, s in specs
+            for j in range(leaks)]  # fmt: skip
+    done: dict[str, list[dict]] = {}
+    if log.exists():
+        for line in log.read_text().splitlines():
+            rec = json.loads(line)
+            if "rows" in rec:
+                done[rec["key"]] = rec["rows"]
+    todo_team = [j for j in team if _key(j) not in done]
+    todo_sims = [j for j in sims if _key(j) not in done]
+    print(f"{len(done)} runs already done; {len(todo_team)} team-model and {len(todo_sims)} "
+          "simulated-model runs to go", flush=True)  # fmt: skip
+    for jobs, n_workers in ((todo_team, cloud_workers if backend == "cloud" else workers),
+                            (todo_sims, workers)):  # fmt: skip
+        if not jobs:
+            continue
+        with ProcessPoolExecutor(n_workers) as pool, log.open("a") as fh:
+            for k, (args, res) in enumerate(pool.map(_safe_job, jobs)):
+                if isinstance(res, str):
+                    print(f"FAILED {_key(args)}: {res[:200]}", flush=True)
+                    fh.write(json.dumps({"key": _key(args), "error": res}) + "\n")
+                else:
+                    done[_key(args)] = res
+                    fh.write(json.dumps({"key": _key(args), "rows": res}) + "\n")
+                fh.flush()
+                if (k + 1) % 5 == 0 or k + 1 == len(jobs):
+                    print(f"{k + 1}/{len(jobs)} runs", flush=True)
+    return [r for j in team + sims if _key(j) in done for r in done[_key(j)]]
 
 
 def paired(rows: list[dict], models: str, planner: str, metric: str, by: str | None = None):
@@ -148,8 +189,9 @@ def main() -> int:
     p.add_argument("--plants", type=int, default=6, help="unseen plants per shape")
     p.add_argument("--leaks", type=int, default=4, help="leaks per plant (perfect, baseline)")
     p.add_argument("--tabpfn-leaks", type=int, default=1, help="leaks per plant, team models")
-    p.add_argument("--backend", default="baseline", choices=("baseline", "cloud"))
+    p.add_argument("--backend", default="cloud", choices=("baseline", "cloud"))
     p.add_argument("--workers", type=int, default=4)
+    p.add_argument("--cloud-workers", type=int, default=2, help="processes calling the cloud")
     p.add_argument("--out", type=Path, default=Path("outputs/shapes"))
     p.add_argument("--plot-only", action="store_true", help="redraw from results.json")
     a = p.parse_args()
@@ -158,7 +200,15 @@ def main() -> int:
     if a.plot_only:
         rows = json.loads(path.read_text())["rows"]
     else:
-        rows = run_study(a.plants, a.leaks, a.tabpfn_leaks, a.backend, a.workers)
+        rows = run_study(
+            a.plants,
+            a.leaks,
+            a.tabpfn_leaks,
+            a.backend,
+            a.workers,
+            a.out / "runs.jsonl",
+            a.cloud_workers,
+        )
         path.write_text(json.dumps({"args": {k: str(v) for k, v in vars(a).items()},
                                     "rows": rows}, indent=1))  # fmt: skip
     from tabpfn_spatial.evac.shapes_plots import plot_all

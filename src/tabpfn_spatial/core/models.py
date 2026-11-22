@@ -61,6 +61,40 @@ class Classifier(Protocol):
 
 
 # ------------------------------------------------------------------ TabPFN adapters --
+RETRIES = 8  # rate-limited calls are retried this many times before giving up
+
+
+def _retry_s(err: Exception) -> float | None:
+    """Seconds to wait if ``err`` is the cloud's rate limit (HTTP 429), else None."""
+    msg = str(err)
+    if "429" not in msg and "Rate limit" not in msg:
+        return None
+    import re
+
+    m = re.search(r"Retry in (\d+(?:\.\d+)?)\s*s", msg)
+    return float(m.group(1)) if m else 10.0
+
+
+def with_retry(fn, *args, **kwargs):
+    """Call ``fn``; on a rate-limit reply wait as told (plus jitter) and try again.
+
+    The cloud allows 60 predict requests per minute per account; parallel studies can
+    exceed it. Other errors are raised at once.
+    """
+    import random
+    import time
+
+    for attempt in range(RETRIES + 1):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as err:
+            wait = _retry_s(err)
+            if wait is None or attempt == RETRIES:
+                raise
+            time.sleep(wait + random.uniform(0.5, 3.0) * (attempt + 1))
+    raise AssertionError("unreachable")
+
+
 class TabPFNRegressorAdapter:
     """Wraps ``tabpfn.TabPFNRegressor`` or ``tabpfn_client.TabPFNRegressor``."""
 
@@ -80,7 +114,7 @@ class TabPFNRegressorAdapter:
     def fit(self, X: np.ndarray, y: np.ndarray) -> "TabPFNRegressorAdapter":
         """Fit (cloud: uploads the training rows)."""
         self._train_rows = len(X)
-        self.estimator.fit(X, y)
+        with_retry(self.estimator.fit, X, y)
         return self
 
     def predict_dist(self, X: np.ndarray) -> QuantileDist:
@@ -88,7 +122,7 @@ class TabPFNRegressorAdapter:
         X = np.asarray(X)
         if self.guard is not None:
             self.guard.check(self._train_rows, len(X), X.shape[1])
-        out = self.estimator.predict(X, output_type="main", quantiles=list(self.levels))
+        out = with_retry(self.estimator.predict, X, output_type="main", quantiles=list(self.levels))
         return QuantileDist.from_main(out, self.levels)
 
 
@@ -104,7 +138,7 @@ class TabPFNClassifierAdapter:
     def fit(self, X: np.ndarray, y: np.ndarray) -> "TabPFNClassifierAdapter":
         """Fit (cloud: uploads the training rows)."""
         self._train_rows = len(X)
-        self.estimator.fit(X, y)
+        with_retry(self.estimator.fit, X, y)
         self.classes_ = np.asarray(self.estimator.classes_)
         return self
 
@@ -113,7 +147,7 @@ class TabPFNClassifierAdapter:
         X = np.asarray(X)
         if self.guard is not None:
             self.guard.check(self._train_rows, len(X), X.shape[1])
-        return np.asarray(self.estimator.predict_proba(X))
+        return np.asarray(with_retry(self.estimator.predict_proba, X))
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Most likely class (reuses ``predict_proba``: one call, not two)."""
