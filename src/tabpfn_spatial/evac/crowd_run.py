@@ -20,8 +20,9 @@ from tabpfn_spatial.evac.crowd_plan import DETOUR_WEIGHT, PLANNERS, assign
 from tabpfn_spatial.evac.fields import danger_window
 from tabpfn_spatial.evac.standins import OracleHazard, OracleLocator
 from tabpfn_spatial.hazard import ForwardSimPredictor, hazard_from_fields
-from tabpfn_spatial.sim import Factory, Scenario, first_alarm, sensor_history, simulate
+from tabpfn_spatial.sim import Factory, Scenario, sensor_history, simulate
 from tabpfn_spatial.source import WeightedCentroidLocator
+from tabpfn_spatial.source.features import alarm_time
 
 AHEAD = 60.0  # seconds of forecast folded into each danger map
 
@@ -87,6 +88,7 @@ def prepare(
 ) -> Prepared:
     """Truth, alarm and model danger maps for one leak. Cost: dominated by the models.
 
+    The alarm and model inputs use the same noisy sensor history.
     ``fitted``: a (locator, predictor) pair to reuse (perfect models are bound to ``sc``,
     so they are always rebuilt). Every update is logged: model times, source error,
     median leak size.
@@ -96,14 +98,17 @@ def prepare(
     times = np.arange(0.0, t_max + 0.5, 1.0)
     fields = simulate(f, [sc], times)[0]
     toxic, fire = hazard_from_fields(f, fields)
-    t_alarm = first_alarm(f, times, fields, every=sample_every)
+    rng, danger, log = np.random.default_rng(seed), [], []
+    history = sensor_history(f, sc, t_max, rng, every=sample_every)
+    full = history(t_max)
+    t_alarm = alarm_time(full.times, full.values)
     replan = np.arange(t_alarm, t_max + 1e-9, update_s) if t_alarm is not None else np.array([])
+    if t_alarm is None:
+        return Prepared(sc, times, fields, toxic | fire, None, replan, danger, log)
     if models == "perfect" or fitted is None:
         loc, pred = make_models(f, sc, models, backend)
     else:
         loc, pred = fitted
-    rng, danger, log = np.random.default_rng(seed), [], []
-    history = sensor_history(f, sc, t_max, rng, every=sample_every)
     for t in replan:
         r = history(float(t))  # one fixed history: old readings never change
         t0 = time.perf_counter()

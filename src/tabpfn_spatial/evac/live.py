@@ -38,12 +38,11 @@ from tabpfn_spatial.hazard import hazard_from_fields
 from tabpfn_spatial.sim import (
     Factory,
     Scenario,
-    first_alarm,
-    readings,
     sensor_history,
     simulate,
 )
 from tabpfn_spatial.sim.plume import DIFFUSIVITY
+from tabpfn_spatial.source.features import alarm_time
 
 POLICIES = ("live", "once", "nearest")
 FORECAST_STEP = 10.0  # seconds between forecast maps
@@ -163,8 +162,10 @@ def run_live(
 ) -> Iterator[Frame]:
     """Yield one ``Frame`` every ``dt`` seconds from 0 to ``t_max``.
 
-    ``t_alarm=None``: the first detector alarm starts everything (no alarm, nobody moves).
+    ``t_alarm=None``: the first noisy sensor alarm starts everything (no alarm, nobody moves).
     ``sample_every``: seconds between sensor samples (alarm check and readings).
+    A supplied ``t_alarm`` is an explicit simulation override. Sensor history is
+    generated once and the readings that trigger the alarm are passed to the locator.
 
     ``latency``: seconds the source + hazard models take; a route made from the readings
     at t reaches the person at t + latency. ``before_plan``: what ``live`` and ``once`` do
@@ -180,8 +181,10 @@ def run_live(
     toxic, fire = hazard_from_fields(factory, fields)
     harm = toxic | fire
     people = {p: Walker(np.asarray(start, float).copy(), planner.speed) for p in POLICIES}
+    history = sensor_history(factory, scenario, t_max, rng, every=sample_every)
     if t_alarm is None:
-        t_alarm = first_alarm(factory, times, fields, every=sample_every)
+        full = history(t_max)
+        t_alarm = alarm_time(full.times, full.values)
     k_alarm = round(t_alarm / dt) if t_alarm is not None else len(times)
     k_every = max(1, round(update_s / dt))
     k_lat = round(latency / dt)
@@ -197,7 +200,7 @@ def run_live(
             for pol in walk:
                 _steer(people[pol], factory, planner, HazardMap(np.array([t]), calm, calm), t)
         if replanned:
-            r = readings(factory, scenario, t, rng, every=sample_every)
+            r = history(t)
             est = locator.locate(factory, r)
             times_f = t + np.arange(0.0, HORIZON + 1e-9, FORECAST_STEP)
             hz = predictor.predict(factory, r, est, times_f)
@@ -294,7 +297,9 @@ def run_pipeline(
 ) -> Iterator[PipelineFrame]:
     """Yield a frame every ``dt`` s; the models run back to back from the alarm.
 
-    No fixed update period: at the alarm everyone heads for the nearest exit and run 1
+    Unless ``t_alarm`` is supplied explicitly, the first noisy sensor alarm starts the
+    loop; the locator receives the same sensor history. No fixed update period: at the
+    alarm everyone heads for the nearest exit and run 1
     starts with the readings so far (locator, then hazard on its output). When both have
     answered, the route lands and run 2 starts at once with all readings up to then, and
     so on for ``max_runs`` runs (after that, everyone is assumed out or on a final route).
@@ -311,11 +316,12 @@ def run_pipeline(
     fields = simulate(factory, [scenario], times, d=diffusivity)[0]
     toxic, fire = hazard_from_fields(factory, fields)
     harm = toxic | fire
-    if t_alarm is None:
-        t_alarm = first_alarm(factory, times, fields, every=sample_every)
-    people = {p: Walker(np.asarray(start, float).copy(), planner.speed) for p in POLICIES}
     history = sensor_history(factory, scenario, t_max, rng, every=sample_every,
                              diffusivity=diffusivity, dropout=dropout, stuck=stuck)  # fmt: skip
+    if t_alarm is None:
+        full = history(t_max)
+        t_alarm = alarm_time(full.times, full.values)
+    people = {p: Walker(np.asarray(start, float).copy(), planner.speed) for p in POLICIES}
     routes: list[np.ndarray] = []
     started: list[Cycle] = []
     landed: list[Cycle] = []

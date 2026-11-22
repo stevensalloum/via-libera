@@ -4,6 +4,18 @@ Only Ahmad's agent edits this file. Update it before every PR.
 
 ## Doing
 
+- Prepare the alarm-alignment and optional diffusivity work for review; previous
+  simulations are historical and have not been rerun with the changed alarm.
+- Review the six-cycle alarm-to-route timing probe and live integration
+  limitations with Ahmad.
+- Review the paired route and observational warning-overlay study with Ahmad;
+  neither the planner nor the warning threshold was changed.
+- Review experimental 90%-recall thresholds with Ahmad. Fixed/varied thresholds
+  selected on validation did not meet 90% pooled recall on the test split; the
+  application and its continuous routing probabilities are unchanged.
+- Review the fixed-versus-varied diffusivity experiment with Ahmad. The optional
+  varied context is implemented, but the default remains fixed: the comparison
+  did not establish a consistent improvement in hazard detection.
 - Multi-layout verification (#39): 117 paired case variations from 28 base leaks in
   two layouts completed before the requested time limit; groups are incomplete
   and uneven. Full settings, route baselines and limitations are in
@@ -16,6 +28,87 @@ Only Ahmad's agent edits this file. Update it before every PR.
 
 ## Done
 
+- Offline compatibility smoke check on Steven's L, U, T and campus templates:
+  Rayan's source interface and the optional varied-spread hazard context returned
+  finite, correctly shaped 2D probability maps on all four. Two hazard-context
+  leaks, eight source-context leaks, one constructed sensor reading per plant,
+  baseline k-NN, zero credits. This checks interfaces, not hazard accuracy,
+  unseen-factory performance or a 3D concentration model.
+- Sensor-alarm alignment: event-driven, single-person and crowd simulations use
+  one noisy sensor history for alarm detection and source input; the older
+  replay no longer redraws earlier readings. Nine offline cases cover three
+  workflows × early/later/no alarm (baseline: clean-field alarm); an additional
+  test checks that the crowd does not initialize models without an alarm. Zero
+  credits. An explicitly provided fixed alarm remains for simulation studies.
+- Simulated `run_pipeline` live-loop check, one default-factory leak (seed
+  20261204), one moving person, cloud models, two cycles, ~60,000 quoted
+  credits: system/noisy sensor alarm both at 5 s; 2 then 3 readings; source +
+  hazard times 2.213 + 4.523 s and 1.694 + 4.213 s; simulated route landings
+  at 12 and 18 s, both to exit 1. Planner calls at the landings took 0.0265 and
+  0.0227 s in total and are not included in the loop's landing clock. One
+  simulated run does not validate guidance, crowd performance or real latency.
+  Details: `hazard/INTEGRATED_TIMING.md`.
+- Integrated component timing, default layout, three simulated leaks, seed
+  20261204, two cycles per leak, one fixed start, cloud TabPFN, source live
+  mode and default true-source hazard context (8,000 rows): median/range source
+  1.676/1.646–2.240 s, hazard 3.623/3.576–4.550 s, one route
+  0.003/0.001–0.005 s, measured total 5.445/5.230–6.244 s. On the same source
+  outputs, source + separately timed forward hazard + route estimated median
+  1.689 s, range 1.659–2.256 s (forward hazard alone median 0.0117 s). Six
+  related cycles are not a reliable latency distribution. Setup, alarm and
+  delivery, movement and crowd planning were excluded. Calls quoted about
+  180,000 cloud credits; forward and offline rehearsal use none. Details,
+  conditions and assumptions: `hazard/INTEGRATED_TIMING.md`.
+- Paired route study, two known layouts, 20 held-out leaks each, five mixing
+  conditions and seed 20261203. Six of 200 variations did not alarm by 120 s
+  and were excluded; the remaining 194 yielded 1,552 correlated person-variations.
+  Nearest-exit / forward immediate / TabPFN immediate exposure was 13.47% /
+  6.89% / 5.61%, and mean completed distance 17.45 / 18.35 / 19.66 m. With an
+  assumed five-second forecast delay, forward / TabPFN exposure was 10.31% /
+  9.28% and distance 18.79 / 20.16 m. TabPFN's exploratory paired interval vs
+  forward includes zero for both timing assumptions. The 19% observational
+  overlay caught 144/229 toxic route-seconds and falsely flagged 149/24,011 safe
+  route-seconds, vs 71/229 and 27/24,011 at 50%. Both used identical routes.
+  Final cloud requests quoted 1,044,389 credits, plus at least 157,024 for a
+  stopped pilot; an interrupted request may incur additional charges. Same
+  simulator for context and truth, no congestion or live latency. Details and
+  baselines: `hazard/ROUTE_STUDY.md`.
+- Alarm-triggered threshold study, two known layouts, 20 base leaks per layout
+  per split, repeated across five diffusivities. Source seed 12345, hazard
+  context seed 1001 (8,000 rows), validation seed 20261201, test seed 20261202,
+  cloud TabPFN. Fixed 0.50 vs selected 0.19: validation recall 69.91% vs
+  90.55%, FPR 2.62% vs 8.02%; test recall 65.76% vs 88.27%, FPR 2.29% vs
+  8.05%. Varied 0.50 vs selected 0.20: validation recall 68.51% vs 90.17%,
+  FPR 2.44% vs 7.85%; test recall 64.65% vs 87.93%, FPR 2.14% vs 7.76%.
+  Forward baseline validation/test recall 83.71%/83.52%, FPR 3.37%/3.39%,
+  zero credits. Of 200 case variations in each split, 5 validation and 21 test
+  had no noisy sensor alarm by 120 s and are excluded from conditional recall;
+  these arise from one validation and five test layout/leak pairs.
+  Clean-field vs noisy-reading alarm mismatch: 4/200 validation and 7/200 test
+  variations. All values are simulation-only, with correlated variations.
+  Approximately 1.8 million credits were quoted across threshold collection,
+  repeats and prior diagnosis; interrupted cloud calls may have extra charges.
+  Details and per-horizon/condition baselines: `hazard/THRESHOLD_STUDY.md`.
+- Pre-alarm follow-up: 33 prior snapshots from 13 layout/leak pairs in the prior diffusivity study,
+  followed with newly generated hypothetical readings to 120 s; 26/33 alarmed
+  after a median 5 s (range 5-50 s), 7/33 did not. For those 26, prior vs
+  Rayan-cloud top-source median error was 17.0 vs 1.0 m: 16 improved, 2
+  worsened, 8 tied. Conditions share base leaks; these are not independent real
+  events. Source calls quoted 40,000 credits vs 0 for the pipe prior. Details
+  and the clean-field vs noisy-reading alarm mismatch are in
+  `hazard/DIFFUSIVITY_STUDY.md`.
+- Varied diffusivity study: two known layouts, 20 held-out leaks per layout,
+  evaluation seed 20261129, repeated under five diffusion values; source context
+  seed 12345, hazard context seed 1001 and 8,000 rows. Training range 0.4-1.6;
+  forward / fixed / varied toxic Brier was 0.05724 / 0.04173 / 0.04190 at 0.2,
+  0.04781 / 0.03977 / 0.04037 at 0.4, 0.04030 / 0.04076 / 0.04183 at 0.8,
+  0.04065 / 0.04155 / 0.04155 at 1.6, and 0.06484 / 0.05020 / 0.04791 at 3.2.
+  Pooled recall at 0.5 was 0.7695 / 0.6144 / 0.5914, 0.7947 / 0.6643 / 0.6355,
+  0.8388 / 0.6896 / 0.6617, 0.8365 / 0.7149 / 0.6924, and 0.8230 / 0.7272 /
+  0.7232 respectively. Quoted cloud credits: 882,720 for source and both hazard
+  models; forward and offline tests 0. Same 2D simulator generates training and
+  truth; 33/200 variants used the pipe prior. Full false-positive rates,
+  bootstrap limits, seeds and limitations: `hazard/DIFFUSIVITY_STUDY.md`.
 - Partial multi-layout cloud study, evaluation seeds 20261121/20261122/20261123,
   hazard context seed 1001, 8,000 rows, Rayan source seed 12345, top 3, open
   cells, five forecast times. Forward / centroid-context / Rayan-context toxic
@@ -150,6 +243,18 @@ Only Ahmad's agent edits this file. Update it before every PR.
 
 ## Needs
 
+- Measure end-to-end sensor-to-guidance timing including route and delivery overhead.
+- Independently validate route outcomes with other plants and simulator physics,
+  actual end-to-end latency, repeated updates, crowd effects and live source-rate
+  behaviour; test route-blocking policies separately before using overlays there.
+- Reassess warning-threshold selection on separate validation and test leaks,
+  more layouts, and an independent simulator; measure detector non-alarms and
+  operational trade-offs before choosing a real-system threshold.
+- Check source and hazard updates on later readings under live conditions; the
+  prior-snapshot benchmark made one call and cannot establish later corrections.
+- Repeat the spreading comparison on independently generated leak seeds, more
+  layouts and a different, time-dependent simulator; measure live cloud latency
+  and select hazard thresholds using separate validation data.
 - Expand the Rayan-source sensor-history pilot beyond five simulated cases and
   one plant before drawing a general conclusion about its additional value.
 - Validate early-alarm accuracy and route outcomes with independent simulation,
