@@ -594,6 +594,7 @@ def main() -> int:
         help="stress: mixing, wind drift, sensor faults (Ahmad's scenarios)",
     )
     p.add_argument("--no-video", action="store_true", help="skip the MP4 in the run folder")
+    p.add_argument("--no-window", action="store_true", help="save the run and exit (batch runs)")
     p.add_argument(
         "--load", type=Path, help="replay a saved run folder (no model calls, no tokens)"
     )
@@ -648,6 +649,6 @@ def main() -> int:
             print(a.still)
         if a.gif:
             print(save_gif(f, sc, frames, fig, axes, a.gif, end, a.t_max))
-    if not (a.video or a.gif or a.still):
+    if not (a.video or a.gif or a.still or a.no_window):
         play(f, sc, frames, a.t_max, stem.with_suffix(".mp4"))
     return 0
