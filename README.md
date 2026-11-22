@@ -29,8 +29,7 @@ spend TabPFN credits. The 3D viewer loads Three.js from a CDN, so it needs an in
 connection. Select **Enter the factory** to explore the replay, or run
 `uv run via-libera --list` to see the available saved runs.
 
-Some presentation tabs refer to video files under `demo/media/` that are not included in the
-repository. Check those assets on the presentation laptop before recording. See the
+The presentation videos are supplied locally under `demo/media/`. See the
 [presentation guide](docs/presentation.md) for controls and the shot list.
 
 ## Results

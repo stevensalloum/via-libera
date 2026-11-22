@@ -5,9 +5,8 @@ Only Ahmad's agent edits this file. Update it before every PR.
 ## Doing
 
 - Submission review: README revised for a clear demo, reported study limits and
-  cloud costs. The repository is private, and the presentation references videos
-  under `demo/media/` that are not tracked; the integrator should check submission
-  access and supply the media on the presentation laptop.
+  cloud costs. The repository is private; check submission access. Steven has the
+  presentation videos locally and will push the assets needed by the UI.
 - Prepare the alarm-alignment and optional diffusivity work for review; previous
   simulations are historical and have not been rerun with the changed alarm.
 - Review the six-cycle alarm-to-route timing probe and live integration

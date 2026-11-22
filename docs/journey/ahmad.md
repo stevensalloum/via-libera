@@ -324,3 +324,4 @@ existing untracked test. No cloud calls were made. The saved story, factory page
 and replay data returned HTTP 200, but the referenced hero video returned 404:
 the presentation videos are not in the checkout. The repository was private at
 the time of review, so submission access also needs checking.
+Steven has the presentation videos locally and will push the assets needed by the UI.
