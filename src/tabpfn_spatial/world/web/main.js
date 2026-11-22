@@ -46,6 +46,14 @@ sky.material.uniforms.mieDirectionalG.value = 0.8;
 sky.material.uniforms.sunPosition.value.copy(sunDir);
 world3d.add(sky);
 world3d.fog = new THREE.Fog("#c9d8e6", span * 3, span * 9);
+// Via Libera look (default): navy night background in the logo's colours; daylight sky on demand.
+function setTheme(day) {
+  sky.visible = day;
+  world3d.background = day ? null : new THREE.Color("#0b1622");
+  world3d.fog.color.set(day ? "#c9d8e6" : "#0b1622");
+  document.body.classList.toggle("day", day);
+}
+setTheme(false);
 const pmrem = new THREE.PMREMGenerator(renderer);
 world3d.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
@@ -217,6 +225,7 @@ if (rep) {  // legend over the map
   const place = () => { lg.style.bottom = `${mini.height + 18}px`; lg.style.maxWidth = `${mini.width}px`; };
   place();
 }
+$("daylight").onchange = (e) => setTheme(e.target.checked);
 const panel = $("panel");
 panel.querySelector("h1").onclick = () => panel.classList.toggle("collapsed");
 if (rep) panel.classList.add("collapsed");
@@ -287,12 +296,13 @@ renderer.domElement.addEventListener("pointerup", (e) => {
 });
 
 // Scripted recording (used to make the milestone videos): plays from the start and saves.
-window.__record = async ({ name, planner = "ccrp", speed = 3, cine = true, person = null } = {}) => {
+window.__record = async ({ name, planner = "ccrp", speed = 3, cine = true, person = null, pview = false } = {}) => {
   if (!replay) return null;
   replay.planner = planner;
   replay.speed = speed;
   replay.cinematic = cine;
-  if (person !== null) { replay.select(person); replay.follow = true; }
+  replay.select(person);
+  if (person !== null) { replay.follow = true; replay.personView = pview; }
   return recordVideo(replay, null, name);
 };
 window.__world = { scene, nav, camera, parts, replay };  // for debugging in the console

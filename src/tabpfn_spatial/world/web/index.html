@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Factory World</title>
+  <title>Via Libera</title>
+  <link rel="icon" href="logo.webp" />
   <script type="importmap">
     {
       "imports": {
@@ -13,8 +14,9 @@
     }
   </script>
   <style>
-    :root { --panel: rgba(18, 22, 28, 0.82); --text: #e8edf2; --muted: #9aa6b2; --accent: #f2c418; }
-    html, body { margin: 0; height: 100%; overflow: hidden; background: #c8d5e0;
+    :root { --panel: rgba(11, 24, 38, 0.9); --line: #22405c; --text: #e6eef5; --muted: #8ba3b8;
+      --accent: #f39200; --cyan: #3fc1e8; --navy: #0b1622; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--navy);
       font: 13px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--text); }
     #app, #app canvas { position: fixed; inset: 0; }
     .labels { position: fixed; inset: 0; pointer-events: none; }
@@ -31,10 +33,14 @@
     #panel h2 { font-size: 11px; text-transform: uppercase; color: var(--muted); margin: 12px 0 6px;
       letter-spacing: 0.6px; }
     .row { display: flex; gap: 6px; flex-wrap: wrap; }
-    button, select { background: #2b333d; color: var(--text); border: 1px solid #3d4752; border-radius: 6px;
+    #panel, #replay, #minilegend { border: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 8px; }
+    .brand img { height: 26px; background: #fff; border-radius: 5px; padding: 2px 5px; }
+    #replay .rhead b { color: var(--accent); font-size: 14px; letter-spacing: 0.4px; }
+    button, select { background: #132a3e; color: var(--text); border: 1px solid #24435e; border-radius: 6px;
       padding: 5px 9px; font: inherit; cursor: pointer; }
     button:hover, select:hover { border-color: var(--accent); }
-    button.primary { background: #3a4a17; border-color: #6d8a1f; }
+    button.primary { background: linear-gradient(90deg, #d96b00, #f39200); border-color: #f39200; color: #fff; }
     select { width: 100%; }
     label.chk { display: flex; align-items: center; gap: 6px; margin: 3px 0; cursor: pointer; }
     #minimap { position: fixed; right: 12px; bottom: 12px; border-radius: 6px;
@@ -43,7 +49,7 @@
       background: var(--panel); padding: 8px 14px; border-radius: 8px; }
     #crosshair { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px;
       border-radius: 50%; background: rgba(255, 255, 255, 0.8); pointer-events: none; }
-    #loading { position: fixed; inset: 0; display: grid; place-items: center; background: #1b2026;
+    #loading { position: fixed; inset: 0; display: grid; place-items: center; background: var(--navy);
       color: var(--accent); font-size: 16px; }
     #replay { position: fixed; left: 12px; top: 12px; bottom: 12px; width: 350px; overflow-y: auto;
       background: var(--panel); border-radius: 10px; padding: 10px 12px; backdrop-filter: blur(6px); }
@@ -75,14 +81,15 @@
     #r-text .calm { color: var(--muted); }
     #r-text .ingas { color: #ff6bf0; }
     @media (max-width: 900px) { #replay { width: auto; right: 12px; top: auto; max-height: 45vh; } }
-    kbd { background: #2b333d; border-radius: 3px; padding: 0 4px; border: 1px solid #3d4752; }
+    kbd { background: #132a3e; border-radius: 3px; padding: 0 4px; border: 1px solid #24435e; }
+    #replay .ticks i { background: var(--cyan); }
   </style>
 </head>
 <body>
   <div id="app"></div>
   <div id="loading">Building the factory...</div>
   <div id="panel">
-    <h1>Factory world</h1>
+    <h1>Via Libera &middot; world</h1>
     <div class="sub" id="info"></div>
     <h2>Move</h2>
     <div class="row">
@@ -107,6 +114,7 @@
     <label class="chk"><input type="checkbox" id="show-labels" checked /> Labels</label>
     <label class="chk"><input type="checkbox" id="show-grid" /> Planner grid (solid cells)</label>
     <label class="chk"><input type="checkbox" id="high-quality" /> High quality (ambient occlusion)</label>
+    <label class="chk"><input type="checkbox" id="daylight" /> Daylight sky</label>
   </div>
   <canvas id="minimap" title="Click to fly there"></canvas>
   <div id="walkhelp" hidden><kbd>W S</kbd> walk &middot; <kbd>A D</kbd> step aside &middot; <kbd>Q E</kbd> / <kbd>&larr; &rarr;</kbd> turn &middot; <kbd>Shift</kbd> run &middot; mouse look (or drag) &middot;
