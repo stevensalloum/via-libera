@@ -12,9 +12,9 @@ function b64(s) {
   return out;
 }
 
-export async function loadReplay() {
+export async function loadReplay(base = "data/") {
   try {
-    const r = await fetch("data/replay.json");
+    const r = await fetch(`${base}replay.json`);
     return r.ok ? await r.json() : null;
   } catch {
     return null;
@@ -53,8 +53,14 @@ export class Replay {
     this.tracks = {};
     for (const [p, d] of Object.entries(rep.planners)) {
       const raw = b64(d.cells);
-      this.tracks[p] = { cells: new Int16Array(raw.buffer), state: b64(d.state), metrics: d.metrics };
+      this.tracks[p] = { cells: new Int16Array(raw.buffer), state: b64(d.state), metrics: d.metrics,
+        routes: (d.routes || []).map((u) => ({ t: u.t, people: new Int32Array(b64(u.people).buffer),
+          offsets: new Int32Array(b64(u.offsets).buffer), cells: new Int16Array(b64(u.cells).buffer) })) };
     }
+    this.selected = null;
+    this.follow = false;
+    this.pathGroup = new THREE.Group();
+    world3d.add(this.pathGroup);
     this.buildGas();
     this.buildDanger();
     this.buildMarkers();
@@ -122,6 +128,84 @@ export class Replay {
     this.colours = STATE_COLOURS.map((h) => new THREE.Color(h));
   }
 
+  // Planned route of person i at update u of planner p (array of [iy, ix]) or null.
+  routeOf(p, u, i) {
+    const r = this.tracks[p].routes[u];
+    if (!r) return null;
+    const j = r.people.indexOf(i);
+    if (j < 0) return null;
+    const out = [];
+    for (let k = r.offsets[j]; k < r.offsets[j + 1]; k++) out.push([r.cells[2 * k], r.cells[2 * k + 1]]);
+    return out;
+  }
+
+  // Seconds person i spends in harmful gas under each planner (state 2 per second).
+  gasSeconds(i) {
+    const out = {};
+    for (const [p, tr] of Object.entries(this.tracks)) {
+      let s = 0;
+      for (let k = 0; k * this.n + i < tr.state.length; k++) if (tr.state[k * this.n + i] === 2) s++;
+      out[p] = s;
+    }
+    return out;
+  }
+
+  select(i) {
+    this.selected = i;
+    this.lastPathKey = null;
+  }
+
+  // Green: the selected planner's latest plan (updates with the models); yellow: its first
+  // plan at the alarm; red: where the plain nearest-exit plan actually took this person.
+  drawPaths(t) {
+    const i = this.selected;
+    if (i === null || i === undefined) { this.pathGroup.clear(); return; }
+    const routes = this.tracks[this.planner].routes;
+    let u = -1;
+    routes.forEach((r, k) => { if (r.t <= t + 1e-6) u = k; });
+    const key = `${i}|${this.planner}|${u}`;
+    if (key === this.lastPathKey) return;
+    this.lastPathKey = key;
+    this.pathGroup.clear();
+    const c = this.cell, F = this.F;
+    const line = (cells, colour, lift, radius) => {
+      if (!cells || cells.length < 2) return;
+      const pts = cells.map(([iy, ix]) => F.P((ix + 0.5) * c, (iy + 0.5) * c, lift));
+      const geo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, false, "catmullrom", 0), pts.length * 4, radius, 6, false);
+      const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: colour, transparent: true, opacity: 0.9, depthTest: false }));
+      mesh.renderOrder = 20;
+      this.pathGroup.add(mesh);
+    };
+    const near = this.tracks.nearest;
+    if (near) {  // actual nearest-exit trajectory, de-duplicated
+      const cells = [];
+      for (let k = 0; k * this.n + i < near.state.length; k++) {
+        const cy = near.cells[2 * (k * this.n + i)], cx = near.cells[2 * (k * this.n + i) + 1];
+        const last = cells.at(-1);
+        if (!last || last[0] !== cy || last[1] !== cx) cells.push([cy, cx]);
+        if (near.state[k * this.n + i] === 3) break;
+      }
+      line(cells, "#e34948", 0.35, 0.16);
+    }
+    if (routes.length) line(this.routeOf(this.planner, 0, i), "#eda100", 0.6, 0.16);
+    if (u >= 0) line(this.routeOf(this.planner, u, i), "#1baf7a", 0.85, 0.2);
+  }
+
+  followCamera(camera) {
+    const i = this.selected;
+    if (i === null || i === undefined) return false;
+    const track = this.tracks[this.planner];
+    const k0 = this.frameIndex(this.t);
+    const [x, y] = this.personXY(track, k0, i);
+    const [x1, y1] = this.personXY(track, this.frameIndex(this.t + 3), i);
+    let dx = x1 - x, dy = y1 - y;
+    const d = Math.hypot(dx, dy);
+    if (d < 0.1) { dx = 0; dy = 1; } else { dx /= d; dy /= d; }
+    camera.position.copy(this.F.P(x - 7 * dx, y - 7 * dy, 4.5));
+    camera.lookAt(this.F.P(x + 4 * dx, y + 4 * dy, 1.0));
+    return true;
+  }
+
   frameIndex(t) { return Math.max(0, Math.min(this.rep.times.length - 1, Math.floor(t))); }
 
   personXY(track, k, i) {
@@ -178,13 +262,15 @@ export class Replay {
     const k0 = this.frameIndex(t), k1 = this.frameIndex(t + 1), a = t - Math.floor(t);
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
     const hidden = new THREE.Matrix4().makeScale(0, 0, 0);
+    const size = this.cinematic ? 2.2 : 1;  // seen from far away in videos: drawn larger
+    const scale = new THREE.Vector3(size, size, size);
     for (let i = 0; i < this.n; i++) {
       const st = track.state[k0 * this.n + i];
       if (st === 3) { this.bodies.setMatrixAt(i, hidden); this.heads.setMatrixAt(i, hidden); continue; }
       const [x0, y0] = this.personXY(track, k0, i), [x1, y1] = this.personXY(track, k1, i);
       const x = x0 + (x1 - x0) * a, y = y0 + (y1 - y0) * a;
       if (Math.hypot(x1 - x0, y1 - y0) > 0.05) q.setFromAxisAngle(up, Math.atan2(x1 - x0, -(y1 - y0)) + Math.PI);
-      m.compose(this.F.P(x, y, 0), q, new THREE.Vector3(1, 1, 1));
+      m.compose(this.F.P(x, y, 0), q, scale);
       this.bodies.setMatrixAt(i, m);
       this.heads.setMatrixAt(i, m);
       this.bodies.setColorAt(i, this.colours[st]);
@@ -232,10 +318,49 @@ export class Replay {
     const alarm = this.rep.t_alarm !== null && this.t >= this.rep.t_alarm;
     this.parts.machines.userData.stopped = alarm;  // robot arms and conveyors e-stop too
     this.parts.zone.show(this.rep.height_zone, alarm ? this.t : null);
+    this.drawPaths(this.t);
     const pulse = 1 + 0.15 * Math.sin(performance.now() / 180);
     for (const r of this.rings) if (r.visible) r.material.opacity = 0.55 + 0.35 * Math.sin(performance.now() / 250);
     return pulse;
   }
+}
+
+const PLAN_COLOURS = { nearest: "#2a78d6", risk: "#eb6834", ccrp: "#1baf7a" };
+
+// Per planner and second: % of people out, people standing in harmful gas (state 3 / 2).
+function planCurves(replay) {
+  const out = {}, n = replay.n;
+  for (const [p, tr] of Object.entries(replay.tracks)) {
+    const T = Math.floor(tr.state.length / n), o = new Float32Array(T), g = new Float32Array(T);
+    for (let k = 0; k < T; k++) {
+      let a = 0, b = 0;
+      for (let i = 0; i < n; i++) { const st = tr.state[k * n + i]; if (st === 3) a++; else if (st === 2) b++; }
+      o[k] = (100 * a) / n; g[k] = b;
+    }
+    out[p] = { out: o, gas: g };
+  }
+  return out;
+}
+
+function drawCurves(cv, curves, key, title, t, tEnd, yMax) {
+  const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, L = 34, B = 18, T0 = 16;
+  ctx.clearRect(0, 0, W, H);
+  const top = yMax ?? Math.max(1, ...Object.values(curves).map((c) => Math.max(...c[key])));
+  ctx.fillStyle = "#c9d1d9"; ctx.font = "11px system-ui"; ctx.fillText(title, L, 11);
+  ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 1;
+  for (const f of [0, 0.5, 1]) {
+    const y = T0 + (1 - f) * (H - T0 - B);
+    ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(W - 4, y); ctx.stroke();
+    ctx.fillStyle = "#8b949e"; ctx.fillText(String(Math.round(f * top)), 4, y + 4);
+  }
+  ctx.fillText("0 s", L, H - 4); ctx.fillText(`${Math.round(tEnd)} s`, W - 40, H - 4);
+  const X = (k) => L + (k / tEnd) * (W - 4 - L), Y = (v) => T0 + (1 - v / top) * (H - T0 - B);
+  for (const [p, c] of Object.entries(curves)) {
+    ctx.strokeStyle = PLAN_COLOURS[p] || "#ccc"; ctx.lineWidth = 2; ctx.beginPath();
+    c[key].forEach((v, k) => (k ? ctx.lineTo(X(k), Y(v)) : ctx.moveTo(X(k), Y(v))));
+    ctx.stroke();
+  }
+  ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(X(t), T0); ctx.lineTo(X(t), H - B); ctx.stroke();
 }
 
 // Timeline panel wired to a Replay.
@@ -253,11 +378,15 @@ export function replayPanel(replay) {
       <label><input type="checkbox" id="r-gas" checked> true gas</label>
       <label><input type="checkbox" id="r-danger"> predicted danger</label>
       <label><input type="checkbox" id="r-source" checked> leak guesses</label>
+      <label title="slow orbit around the plant, for videos"><input type="checkbox" id="r-cine"> cinematic camera</label>
       <button id="r-record" title="Plays from the start and saves the 3D view as a video file">&#9679; Record video</button>
     </div>
     <div class="rtrack"><input type="range" id="r-time" min="0" max="${rep.t_end}" step="0.1" value="0">
       <div class="ticks">${updates}${rep.t_alarm !== null ? `<b style="left:${(100 * rep.t_alarm) / rep.t_end}%"></b>` : ""}</div></div>
-    <div id="r-text"></div>`;
+    <div id="r-text"></div>
+    <div class="rcharts"><canvas id="r-out" width="420" height="110"></canvas><canvas id="r-ingas" width="420" height="110"></canvas>
+      <div id="r-legend"></div></div>
+    <div id="r-person" hidden></div>`;
   document.body.appendChild(el);
   const $ = (id) => document.getElementById(id);
   $("r-play").onclick = () => {
@@ -273,7 +402,23 @@ export function replayPanel(replay) {
   replay.showSource = true;
   $("r-source").onchange = (e) => { replay.showSource = e.target.checked; replay.lastUpdate = -2; };
   $("r-record").onclick = () => recordVideo(replay, $("r-record"));
+  $("r-cine").onchange = (e) => { replay.cinematic = e.target.checked; };
+  const curves = planCurves(replay);
+  $("r-legend").innerHTML = Object.keys(curves).map((p) => `<span style="color:${PLAN_COLOURS[p] || "#ccc"}">&#9644; ${p}</span>`).join(" ");
   return () => {
+    const card = $("r-person");
+    if (replay.selected !== null && replay.selected !== undefined) {
+      const i = replay.selected, g = replay.gasSeconds(i);
+      card.hidden = false;
+      card.innerHTML = `<b>Person ${i}</b> &middot; <span style="color:#1baf7a">&#9644; ${replay.planner} plan now</span> ` +
+        `<span style="color:#eda100">&#9644; first plan</span> <span style="color:#e34948">&#9644; nearest-exit path</span><br>` +
+        `seconds in gas: ${Object.entries(g).map(([p, s]) => `${p} ${s} s`).join(" &middot; ")} &middot; ` +
+        `<button id="r-follow">${replay.follow ? "Stop following" : "Follow"}</button> <button id="r-clear">Clear</button>`;
+      $("r-follow").onclick = () => { replay.follow = !replay.follow; };
+      $("r-clear").onclick = () => { replay.select(null); replay.follow = false; };
+    } else card.hidden = true;
+    drawCurves($("r-out"), curves, "out", "% of people out", replay.t, rep.t_end, 100);
+    drawCurves($("r-ingas"), curves, "gas", "people in harmful gas now", replay.t, rep.t_end, null);
     $("r-play").innerHTML = replay.playing ? "&#10074;&#10074; Pause" : "&#9654; Play";
     $("r-time").value = replay.t;
     const s = replay.stats(), m = rep.planners[replay.planner].metrics;
@@ -292,32 +437,44 @@ export function replayPanel(replay) {
   };
 }
 
-// Record the 3D canvas while the replay plays from the start; download a WebM at the end.
-// (Labels are HTML on top of the canvas and are not in the video.)
-function recordVideo(replay, button) {
+// Record the 3D canvas while the replay plays from the start. Served by `uv run world`, the
+// video is saved into the run's folder (videos/); otherwise it downloads as a WebM.
+// (Labels are HTML on top of the canvas and are not in the video.) Returns a promise.
+export function recordVideo(replay, button, name) {
   const canvas = document.querySelector("#app canvas");
   if (!canvas.captureStream || typeof MediaRecorder === "undefined") {
     alert("This browser cannot record the canvas; use screen recording (Cmd+Shift+5).");
-    return;
+    return Promise.resolve(null);
   }
   const type = ["video/webm;codecs=vp9", "video/webm"].find((t) => MediaRecorder.isTypeSupported(t));
   const rec = new MediaRecorder(canvas.captureStream(30), { mimeType: type, videoBitsPerSecond: 8e6 });
   const chunks = [];
+  const file = name || `replay-${replay.rep.seed}-${replay.planner}.webm`;
   rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-  rec.onstop = () => {
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob(chunks, { type: "video/webm" }));
-    a.download = `factory-replay-${replay.rep.seed}-${replay.planner}.webm`;
-    a.click();
-    button.disabled = false;
-    button.innerHTML = "&#9679; Record video";
-  };
+  const done = new Promise((resolve) => {
+    rec.onstop = async () => {
+      const blob = new Blob(chunks, { type: "video/webm" });
+      let saved = null;
+      try {
+        const r = await fetch(`save/${encodeURIComponent(file)}${location.search}`, { method: "POST", body: blob });
+        if (r.ok) saved = (await r.json()).path;
+      } catch { /* not served by uv run world */ }
+      if (!saved) {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = file;
+        a.click();
+      }
+      if (button) { button.disabled = false; button.innerHTML = saved ? "&#10003; Saved" : "&#9679; Record video"; }
+      resolve(saved || file);
+    };
+  });
   replay.t = 0;
   replay.playing = true;
-  button.disabled = true;
-  button.textContent = "Recording...";
+  if (button) { button.disabled = true; button.textContent = "Recording..."; }
   rec.start(1000);
   const check = setInterval(() => {
     if (!replay.playing) { clearInterval(check); rec.stop(); }
   }, 250);
+  return done;
 }

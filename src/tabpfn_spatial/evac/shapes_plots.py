@@ -152,6 +152,7 @@ def plot_locator(rows: list[dict], path: Path) -> Path:
                 )
     ax.set_xticks(x, KINDS)
     ax.set_yscale("symlog", linthresh=1)
+    ax.set_ylim(bottom=0)
     ax.set_ylabel("leak position error (m)")
     ax.set_title(
         "Where is the leak? Locator error on unseen plants (big dot: median)",
