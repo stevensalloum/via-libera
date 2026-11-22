@@ -41,6 +41,23 @@ def _gas_byte(field: np.ndarray) -> np.ndarray:
     return np.clip(np.round(q), 0, 255) * (field > 10**GAS_LOG_MIN)
 
 
+def pack_routes(snapshots: list[dict]) -> list[dict]:
+    """Per replan: {"t", "people": (p,) int32, "offsets": (p+1,), "cells": (m, 2) int16}, base64.
+
+    Person ``people[j]``'s route is ``cells[offsets[j]:offsets[j+1]]`` (grid iy, ix).
+    """
+    out = []
+    for snap in snapshots:
+        ids = sorted(snap["routes"])
+        paths = [snap["routes"][i] for i in ids]
+        offsets = np.cumsum([0] + [len(r) for r in paths]).astype(np.int32)
+        cells = np.concatenate(paths).astype(np.int16) if paths else np.zeros((0, 2), np.int16)
+        enc = lambda a: base64.b64encode(np.ascontiguousarray(a).tobytes()).decode()  # noqa: E731
+        out.append({"t": snap["t"], "people": enc(np.array(ids, np.int32)),
+                    "offsets": enc(offsets), "cells": enc(cells)})  # fmt: skip
+    return out
+
+
 def _track(prep, frames: list[dict], k_end: int) -> tuple[str, str]:
     """(cells int16 base64, state uint8 base64) for seconds 0..k_end."""
     cells = np.stack([fr["cells"] for fr in frames[: k_end + 1]]).astype(np.int16)
@@ -67,7 +84,8 @@ def make_replay(
     if f.agv_lanes:
         people = sample_workers(f_run, rung.people, rng)
     params = CrowdParams(door_m=rung.door_m)
-    runs = {p: run_crowd(f_run, prep, people, p, params, record_every=1) for p in PLANNERS}
+    runs = {p: run_crowd(f_run, prep, people, p, params, record_every=1, record_routes=True)
+            for p in PLANNERS}  # fmt: skip
     ends = [r.metrics["out_all_s"] for r in runs.values() if np.isfinite(r.metrics["out_all_s"])]
     k_end = int(min(rung.t_max, (max(ends) if ends else rung.t_max) + 10))
     gas_t = np.arange(0.0, k_end + 1e-9, gas_every)
@@ -85,7 +103,7 @@ def make_replay(
         cells, state = _track(prep, r.frames, k_end)
         last = r.frames[min(k_end, len(r.frames) - 1)]
         planners[p] = {"cells": cells, "state": state, "metrics": r.metrics,
-                       "exit": last["exit"].tolist()}  # fmt: skip
+                       "exit": last["exit"].tolist(), "routes": pack_routes(r.routes)}  # fmt: skip
     wind = float(np.linalg.norm(sc.wind))
     zone = {
         "truth": {"xy": sc.source.tolist(), **height_zone(f.gas, float(sc.rate), wind)},

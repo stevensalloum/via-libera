@@ -81,12 +81,12 @@ RUNGS = (
 
 # Shaped plants with corridors, rooms and AGVs (sim.layouts templates). Kept apart from
 # RUNGS so the existing crowd studies are unchanged.
-SHAPED_RUNGS = (
-    Rung("L", "L-shaped plant 90x70 m, 300 people, methane", 300, layout="L-plant"),
-    Rung("U", "U-shaped plant 100x70 m, 300 people, propane", 300, layout="U-plant"),
-    Rung("T", "T-shaped plant 90x80 m, 300 people, hydrogen", 300, layout="T-plant"),
+SHAPED_RUNGS = (  # evacuations finish within ~2 min: 200 s keeps the cloud calls down
+    Rung("L", "L-shaped plant 90x70 m, 300 people, methane", 300, layout="L-plant", t_max=200.0),
+    Rung("U", "U-shaped plant 100x70 m, 300 people, propane", 300, layout="U-plant", t_max=200.0),
+    Rung("T", "T-shaped plant 90x80 m, 300 people, hydrogen", 300, layout="T-plant", t_max=200.0),
     Rung("K", "campus: two halls + corridor + offices 120x70 m, 400 people", 400,
-         layout="campus", t_max=500.0),
+         layout="campus", t_max=200.0),
 )  # fmt: skip
 
 

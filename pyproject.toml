@@ -33,6 +33,7 @@ closed-loop = "tabpfn_spatial.loop:main"
 evac-pipeline = "tabpfn_spatial.evac.pipeline_view:main"
 evac-runs = "tabpfn_spatial.evac.compare_runs:main"
 milestone = "tabpfn_spatial.milestone:main"
+gallery = "tabpfn_spatial.gallery:main"
 
 [project.optional-dependencies]
 local = [

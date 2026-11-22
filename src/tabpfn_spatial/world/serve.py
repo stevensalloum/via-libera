@@ -61,6 +61,32 @@ class _Handler(SimpleHTTPRequestHandler):
             return str(self.data / path.split("?")[0][len("/data/") :])
         return super().translate_path(path)
 
+    def do_POST(self) -> None:
+        """``POST /save/<name>.webm``: a video recorded in the viewer, into ``<data>/videos/``."""
+        import re
+        from urllib.parse import parse_qs, unquote, urlsplit
+
+        url = urlsplit(self.path)
+        name = unquote(url.path.removeprefix("/save/"))
+        run = parse_qs(url.query).get("run", [""])[0]
+        if run and not re.fullmatch(r"[A-Za-z0-9._-]{1,120}", run):
+            self.send_error(400, "bad run name")
+            return
+        size = int(self.headers.get("Content-Length", 0))
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,120}\.webm", name) or not 0 < size < 2_000_000_000:
+            self.send_error(400, "expected /save/<name>.webm with a body")
+            return
+        folder = (self.data / run if run else self.data) / "videos"
+        folder.mkdir(parents=True, exist_ok=True)
+        target = folder / name
+        target.write_bytes(self.rfile.read(size))
+        body = json.dumps({"path": str(target)}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def end_headers(self) -> None:
         self.send_header("Cache-Control", "no-store")  # always the latest export
         super().end_headers()
