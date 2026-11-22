@@ -25,6 +25,7 @@ def training_rows(
     include_time_context: bool = False,
     include_sensor_history: bool = False,
     observation_times: np.ndarray | None = None,
+    diffusivity_range: tuple[float, float] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Generate examples using estimated sources and measured, noisy wind.
 
@@ -32,11 +33,18 @@ def training_rows(
     true scenario's concentration. Forecasts never precede their observations.
     Defaults cover decision times 5-60 s and horizons 0-120 s. The default
     locator is a proxy until the live source model is available.
+    Optionally draw one log-uniform diffusivity per scenario; it is shared by
+    sensor readings and target fields and is not included as a model feature.
+    A separate random stream preserves the paired scenarios and sensor noise.
 
     Cost: simulator time plus O(scenarios * times * cells * grid diameter).
     """
     if n_scenarios < 1 or cells_per_scenario < 1:
         raise ValueError("training requires scenarios, cells and times")
+    if diffusivity_range is not None:
+        low, high = diffusivity_range
+        if not np.isfinite([low, high]).all() or low <= 0 or high < low:
+            raise ValueError("diffusivity range must be positive, finite and ordered")
     if times is not None:
         times = np.asarray(times, dtype=float)
         if times.ndim != 1 or not len(times) or np.any(~np.isfinite(times)):
@@ -56,11 +64,20 @@ def training_rows(
         if times is not None and observation_times[0] > times[0]:
             raise ValueError("an observation time must not follow the first forecast")
     rng = np.random.default_rng(seed)
+    diffusion_rng = np.random.default_rng(np.random.SeedSequence([seed, 0xD1FF]))
     scenarios = sample_scenarios(factory, n_scenarios, rng)
     locator = locator if locator is not None else WeightedCentroidLocator()
     open_cells = np.argwhere(~factory.walls)
     features, targets = [], []
     for sc in scenarios:
+        diffusion = None
+        if diffusivity_range is not None:
+            low, high = diffusivity_range
+            diffusion = (
+                low
+                if low == high
+                else float(np.exp(diffusion_rng.uniform(np.log(low), np.log(high))))
+            )
         if times is None:
             choices = [5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 60.0]
             t_obs = float(rng.choice(choices if observation_times is None else observation_times))
@@ -74,7 +91,11 @@ def training_rows(
             )
             t_obs = float(rng.choice(available[available <= times[0]]))
             forecast_times = times
-        obs = readings(factory, sc, t_obs, rng)
+        obs = (
+            readings(factory, sc, t_obs, rng)
+            if diffusion is None
+            else readings(factory, sc, t_obs, rng, diffusivity=diffusion)
+        )
         estimate = locator.locate(factory, obs)
         selection = select_source_cells(estimate.prob, factory.walls, 3, None)
         source_index = int(rng.choice(selection.indices, p=selection.weights))
@@ -84,7 +105,11 @@ def training_rows(
             if estimate.rate is None or estimate.rate_levels is None
             else float(np.interp(0.5, estimate.rate_levels, estimate.rate))
         )
-        fields = simulate(factory, [sc], forecast_times)[0]
+        fields = (
+            simulate(factory, [sc], forecast_times)
+            if diffusion is None
+            else simulate(factory, [sc], forecast_times, d=diffusion)
+        )[0]
         chosen = open_cells[rng.integers(len(open_cells), size=cells_per_scenario)]
         xy = factory.centres()[chosen[:, 0], chosen[:, 1]]
         geometry = path_features(factory, source_xy, xy) if include_geometry else None

@@ -72,11 +72,14 @@ class TabPFNHazardPredictor:
         *,
         source_locator: SourceLocator | None = None,
         observation_times: np.ndarray | None = None,
+        diffusivity_range: tuple[float, float] | None = None,
     ) -> "TabPFNHazardPredictor":
         """Fit on simulated concentrations; optionally use the live source locator.
 
         The supplied locator must already be ready to predict for this factory.
         A locator using cloud inference may spend credits once per training scenario.
+        ``diffusivity_range`` optionally varies spreading per simulated scenario;
+        the model does not receive the unknown diffusivity as a feature.
         """
         x, y = training_rows(
             factory,
@@ -89,6 +92,7 @@ class TabPFNHazardPredictor:
             include_time_context=self.include_time_context,
             include_sensor_history=self.include_sensor_history,
             observation_times=observation_times,
+            diffusivity_range=diffusivity_range,
         )
         self.model = make_regressor(self.backend).fit(x, y)
         return self
