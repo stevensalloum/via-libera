@@ -68,3 +68,86 @@ def load_voxel_maps(path: Path) -> list[VoxelRun]:
             )
         )
     return runs
+
+
+STAT_COLS = ["u", "v", "w", "su", "sv", "sw", "pid", "pid_sd", "pid_p90", "n", "t"]
+
+
+def extract_stats(pkl: Path, out: Path) -> Path:
+    """Per-voxel turbulence and intermittency from the 10 Hz series (experiments.pkl, 1.3 GB).
+
+    For each sampling experiment and each of the probe's 4 layers, rows are grouped by the
+    gantry position (NaN while moving). Per voxel: mean and standard deviation of the 3D
+    wind (u, v, w, su, sv, sw in m/s), PID ppm mean / standard deviation / 90th percentile,
+    the number of 10 Hz samples and the mean time t (s from the run start: the raster is
+    sequential and the tunnel background grows, so each voxel needs its own background).
+    Also the upstream PID at 1 Hz (background build-up). Writes one small ``.npz``; the
+    big pickle can then be deleted.
+    """
+    import pickle
+
+    import pandas as pd
+
+    with open(pkl, "rb") as fh:
+        data = pickle.load(fh)["Sampling_Experiments"]
+    arrays: dict[str, np.ndarray] = {}
+    for k, e in enumerate(data, start=1):
+        rows = []
+        t0 = e["upstream"][0].index[0]
+        for df in e["layers"]:
+            d = pd.DataFrame({
+                "t": (df.index - t0).total_seconds(),
+                "x": df[("x", "")], "y": df[("y", "")], "z": df[("z", "")],
+                "u": df[("wind-u", "")], "v": df[("wind-v", "")], "w": df[("wind-w", "")],
+                "pid": df[("PID-sensor", "ppm")],
+            }).dropna(subset=["x", "y", "z"])  # fmt: skip
+            g = d.groupby(["x", "y", "z"])
+            s = pd.concat([g[["u", "v", "w"]].mean(),
+                           g[["u", "v", "w"]].std().add_prefix("s"),
+                           g["pid"].mean(), g["pid"].std().rename("pid_sd"),
+                           g["pid"].quantile(0.9).rename("pid_p90"),
+                           g["pid"].size().rename("n"), g["t"].mean()],
+                          axis=1).reset_index()  # fmt: skip
+            rows.append(s)
+        s = pd.concat(rows, ignore_index=True)
+        arrays[f"e{k}_xyz"] = s[["x", "y", "z"]].to_numpy(np.float32)
+        arrays[f"e{k}_stats"] = s[STAT_COLS].to_numpy(np.float32)
+        up = e["upstream"][0]
+        pid = up[("PID-sensor", "ppm")]
+        sec = (pid.index - pid.index[0]).total_seconds().astype(int)
+        arrays[f"e{k}_upstream_pid_1hz"] = pid.groupby(sec).mean().to_numpy(np.float32)
+    np.savez_compressed(out, **arrays)
+    return out
+
+
+def load_stats(path: Path, experiment: int) -> tuple[np.ndarray, dict[str, np.ndarray]]:
+    """(xyz (n, 3), {column: (n,)}) of ``extract_stats`` for one sampling experiment."""
+    with np.load(path) as d:
+        xyz, st = d[f"e{experiment}_xyz"], d[f"e{experiment}_stats"]
+        cols = {c: st[:, i] for i, c in enumerate(STAT_COLS)}
+        cols["upstream_pid_1hz"] = d[f"e{experiment}_upstream_pid_1hz"]
+    return xyz, cols
+
+
+def background(t: np.ndarray, pid: np.ndarray, half_window: float = 450.0,
+               q: float = 10.0) -> np.ndarray:  # fmt: skip
+    """Tunnel background at each voxel's time.
+
+    It is the ``q``-th percentile of all PID readings within +-``half_window`` s.
+
+    The closed tunnel fills with fog over a run (upstream sensor: ~0 to 1-2 relative ppm), so
+    a fixed background is wrong. The raster sweeps mostly plume-free air, so the lower
+    envelope of what was measured around time t is the background at t. Checked against the
+    upstream sensor cross-calibrated on upwind voxels where that fit is good (exp 4-7).
+    """
+    order = np.argsort(t)
+    ts, ps = t[order], pid[order]
+    lo = np.searchsorted(ts, t - half_window)
+    hi = np.searchsorted(ts, t + half_window, side="right")
+    return np.array([np.percentile(ps[a:b], q) for a, b in zip(lo, hi, strict=True)])
+
+
+def excess(path: Path, experiment: int) -> tuple[np.ndarray, np.ndarray, dict[str, np.ndarray]]:
+    """(xyz, PID excess above the time-local background, stats) for one experiment."""
+    xyz, s = load_stats(path, experiment)
+    return xyz, s["pid"] - background(s["t"], s["pid"]), s
