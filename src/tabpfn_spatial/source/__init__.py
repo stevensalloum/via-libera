@@ -9,6 +9,8 @@ plant (``sim.plant3d``).
 
 from tabpfn_spatial.source.baseline import WeightedCentroidLocator, localisation_error
 from tabpfn_spatial.source.height_locator import HeightLocator
+from tabpfn_spatial.source.locator3d import TabPFNLocator3D
 from tabpfn_spatial.source.tabpfn_locator import TabPFNLocator
 
-__all__ = ["HeightLocator", "TabPFNLocator", "WeightedCentroidLocator", "localisation_error"]
+__all__ = ["HeightLocator", "TabPFNLocator", "TabPFNLocator3D", "WeightedCentroidLocator",
+           "localisation_error"]  # fmt: skip
