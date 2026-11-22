@@ -29,6 +29,7 @@ from tabpfn_spatial.sim.plant3d import Plant3D
 from tabpfn_spatial.sim.plume import Scenario
 
 FORECAST = np.arange(0.0, AHEAD + 1e-9, 20.0)  # s ahead asked of the hazard model
+LOW_M = 2.0  # m: "low" leaks are at breathing height
 IGNITION_M = 1.5  # m around hot machines counted as ignition (Ahmad's adapter)
 
 
@@ -44,7 +45,7 @@ class Models3D:
 
 
 def fit_models3d(f: Factory, backend: str = "cloud", n_train: int = 200, n_hazard: int = 24,
-                 seed: int = 0) -> Models3D:  # fmt: skip
+                 seed: int = 0, near: float = 0.0) -> Models3D:  # fmt: skip
     """Fit Rayan's 3D locator + height model and Ahmad's 3D hazard model on ``f`` in 3D."""
     from tabpfn_spatial.hazard.plant3d_adapter import plant_grid, plant_training_rows
     from tabpfn_spatial.hazard.volume3d_predictor import TabPFNVolumePredictor
@@ -56,7 +57,8 @@ def fit_models3d(f: Factory, backend: str = "cloud", n_train: int = 200, n_hazar
     loc = TabPFNLocator3D(backend=backend, n_train=n_train, seed=seed + 100).fit(plant)
     hts = HeightLocator(backend=backend, n_train=n_train, seed=seed + 111, workers=4).fit(plant)
     x, y = plant_training_rows(plant, grid, n_scenarios=n_hazard, cells_per_scenario=80,
-                               times=np.arange(5.0, 121.0, 15.0), seed=seed + 222)  # fmt: skip
+                               times=np.arange(5.0, 121.0, 15.0), seed=seed + 222,
+                               near=near)  # fmt: skip
     hz = TabPFNVolumePredictor(backend=backend, top_k=2).fit_examples(grid, x, y)
     return Models3D(plant, loc, hts, hz, grid)
 
@@ -85,12 +87,17 @@ def _per_second(run: Run3D, times: np.ndarray) -> np.ndarray:
     return (1 - w) * frames[lo] + w * frames[hi]
 
 
-def leak_for(f: Factory, sc: Scenario, seed: int) -> Leak3D:
-    """A 3D leak at one of the plant's pipe sites (rack or vertical), with ``sc``'s size."""
+def leak_for(f: Factory, sc: Scenario, seed: int, low: bool = False) -> Leak3D:
+    """A 3D leak at one of the plant's pipe sites (rack or vertical), with ``sc``'s size.
+
+    ``low``: only sites at most ``LOW_M`` high (vertical pipes near people: the hard case).
+    """
     plant = Plant3D(f)
     sites, w = plant.leak_sites
     idx = plant.grid.index(sites)
     ok = ~plant.solid[tuple(idx.T)]
+    if low and (ok & (sites[:, 2] <= LOW_M)).any():
+        ok &= sites[:, 2] <= LOW_M
     sites, w = sites[ok], w[ok]
     i = np.random.default_rng(seed).choice(len(sites), p=w / w.sum())
     return Leak3D(tuple(float(v) for v in sites[i]), float(sc.rate), f.gas)
@@ -98,10 +105,12 @@ def leak_for(f: Factory, sc: Scenario, seed: int) -> Leak3D:
 
 def prepare3d(f: Factory, sc: Scenario, models: str, t_max: float = 300.0,
               update_s: float = 15.0, seed: int = 0, fitted: Models3D | None = None,
-              backend: str = "cloud") -> tuple[Prepared, Run3D]:  # fmt: skip
+              backend: str = "cloud", low: bool = False,
+              rate_x: float = 1.0) -> tuple[Prepared, Run3D]:  # fmt: skip
     """Truth, sensor-triggered alarm and 3D-model danger maps for one leak."""
     plant = fitted.plant if fitted else Plant3D(f)
-    leak = leak_for(f, sc, seed)
+    sc = dataclasses.replace(sc, rate=float(sc.rate) * rate_x)
+    leak = leak_for(f, sc, seed, low)
     sc = dataclasses.replace(sc, source=np.array(leak.xyz[:2]))
     run = simulate(plant, leak, Ventilation.from_scenario(sc), t_end=t_max, every=5.0)
     times = np.arange(0.0, t_max + 0.5, 1.0)

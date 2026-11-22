@@ -54,7 +54,7 @@ def factory(name: str) -> Factory:
 def hazard_skill(prep, f: Factory) -> dict:
     """Danger maps vs the true harm in the next ``AHEAD`` s (open cells, all updates)."""
     m = ~f.walls
-    briers, recalls, false = [], [], []
+    briers, recalls, recalls20, false = [], [], [], []
     for t, d in zip(prep.replan_times, prep.danger, strict=True):
         k = int(t)
         truth = prep.harm[k : k + int(AHEAD) + 1].max(axis=0)
@@ -62,17 +62,19 @@ def hazard_skill(prep, f: Factory) -> dict:
         briers.append(float(np.mean((p - y) ** 2)))
         if y.any():
             recalls.append(float(np.mean(p[y] >= 0.5)))
+            recalls20.append(float(np.mean(p[y] >= 0.2)))
         false.append(float(np.mean((p >= 0.5) & ~y)))
     mean = lambda a: float(np.mean(a)) if a else None  # noqa: E731
-    return {"hz_brier": mean(briers), "hz_recall": mean(recalls), "hz_false": mean(false)}
+    return {"hz_brier": mean(briers), "hz_recall": mean(recalls), "hz_recall20": mean(recalls20),
+            "hz_false": mean(false)}  # fmt: skip
 
 
-def plant_job(args: tuple[str, tuple[int, ...], str, int]) -> list[dict]:
+def plant_job(args: tuple) -> list[dict]:
     """Fit the 3D models on one plant, then every leak x models x policy."""
-    name, leaks, backend, n_train = args
+    name, leaks, backend, n_train, opt = args
     f = factory(name)
     t0 = time.perf_counter()
-    fitted = fit_models3d(f, backend, n_train=n_train)
+    fitted = fit_models3d(f, backend, n_train=n_train, near=opt["near"])
     fit_s = time.perf_counter() - t0
     rows = []
     for seed in leaks:
@@ -80,13 +82,14 @@ def plant_job(args: tuple[str, tuple[int, ...], str, int]) -> list[dict]:
             rng = np.random.default_rng(seed)
             sc = sample_scenarios(f, 1, rng)[0]
             t1 = time.perf_counter()
-            prep, run = prepare3d(f, sc, models, T_MAX, UPDATE_S, seed,
-                                  fitted if models == "tabpfn" else None, backend)  # fmt: skip
+            prep, run = prepare3d(f, sc, models, T_MAX, opt["update_s"], seed,
+                                  fitted if models == "tabpfn" else None, backend,
+                                  low=opt["low"], rate_x=opt["rate_x"])  # fmt: skip
             f_run, _ = blocked_factory(f, prep.t_alarm)
             people = sample_workers(f_run, people_for(f), rng)
             log = prep.log
             info = {
-                "plant": name, "split": "unseen" if "@" in name else "known", "leak": seed,
+                **opt, "plant": name, "split": "unseen" if "@" in name else "known", "leak": seed,
                 "models": models, "backend": backend if models == "tabpfn" else "-",
                 "gas": f.gas, "leak_z": run.leak.xyz[2], "people": len(people),
                 "t_alarm": prep.t_alarm, "fit_s": fit_s, "prepare_s": time.perf_counter() - t1,
@@ -114,7 +117,7 @@ def _safe(args: tuple) -> tuple[tuple, list[dict] | str]:
 
 
 def run_study(plants: list[str], leaks: int, backend: str, workers: int, n_train: int,
-              log: Path) -> list[dict]:  # fmt: skip
+              log: Path, opt: dict | None = None) -> list[dict]:  # fmt: skip
     """One job per plant (models fitted once), each saved to ``log`` when it finishes."""
     done = {}
     if log.exists():
@@ -122,8 +125,10 @@ def run_study(plants: list[str], leaks: int, backend: str, workers: int, n_train
             rec = json.loads(line)
             if "rows" in rec:
                 done[rec["key"]] = rec["rows"]
+    opt = {"update_s": UPDATE_S, "low": False, "near": 0.0, "rate_x": 1.0, **(opt or {})}
     seeds = tuple(2000 + j for j in range(leaks))
-    jobs = [(p, seeds, backend, n_train) for p in plants if f"{p}|{leaks}|{backend}" not in done]
+    jobs = [(p, seeds, backend, n_train, opt) for p in plants
+            if f"{p}|{leaks}|{backend}" not in done]  # fmt: skip
     print(f"{len(done)} plants done, {len(jobs)} to go", flush=True)
     log.parent.mkdir(parents=True, exist_ok=True)
     with ProcessPoolExecutor(max(1, workers)) as pool, log.open("a") as fh:
@@ -161,7 +166,8 @@ def table(rows: list[dict]) -> str:
             g = lambda k, r=r: np.nanmedian([x[k] for x in r if x.get(k) is not None])  # noqa: E731
             out.append(f"{split}: locator {g('loc_err_median_m'):.1f} m (first "
                        f"{g('loc_err_first_m'):.1f} m), height {g('height_err_m'):.2f} m, "
-                       f"hazard Brier {g('hz_brier'):.3f}, recall {g('hz_recall'):.2f}, "
+                       f"hazard Brier {g('hz_brier'):.3f}, recall {g('hz_recall'):.2f} "
+                       f"(at P>=0.2: {g('hz_recall20'):.2f}), "
                        f"false alarms {g('hz_false'):.3f}, alarm {g('t_alarm'):.0f} s")  # fmt: skip
     return "\n".join(out)
 
@@ -177,25 +183,30 @@ def main() -> int:
     p.add_argument("--workers", type=int, default=2, help="plants in parallel (cloud: 2)")
     p.add_argument("--out", type=Path, default=OUT)
     p.add_argument("--figures", action="store_true", help="only redraw figures and table")
+    p.add_argument("--stress", action="store_true",
+                   help="hard case: low leaks near people, 2x rate, updates every 5 s, hazard "
+                        "training near the plume (saved as runs-cloud-stress.jsonl)")  # fmt: skip
     a = p.parse_args()
     from tabpfn_spatial.env import load_env
 
     load_env()
     unseen = [f"{k}@{FIRST_SEED + 50 + i}" for k in KINDS for i in range(a.unseen)]
     plants = a.only or [*KNOWN, *unseen]
-    log = a.out / f"runs-{a.backend}.jsonl"
+    tag = f"{a.backend}-stress" if a.stress else a.backend
+    opt = {"update_s": 5.0, "low": True, "near": 0.6, "rate_x": 2.0} if a.stress else None
+    log = a.out / f"runs-{tag}.jsonl"
     if a.figures:
         rows = [
             r for line in log.read_text().splitlines() for r in json.loads(line).get("rows", [])
         ]
     else:
-        rows = run_study(plants, a.leaks, a.backend, a.workers, a.n_train, log)
+        rows = run_study(plants, a.leaks, a.backend, a.workers, a.n_train, log, opt)
     from tabpfn_spatial.evac.final_plots import figures
 
     text = table(rows)
-    (a.out / f"table-{a.backend}.txt").write_text(text + "\n")
+    (a.out / f"table-{tag}.txt").write_text(text + "\n")
     print(text)
-    for path in figures(rows, a.out, a.backend):
+    for path in figures(rows, a.out, tag):
         print(path)
     return 0
 
