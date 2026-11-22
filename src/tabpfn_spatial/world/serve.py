@@ -70,9 +70,15 @@ class _Handler(SimpleHTTPRequestHandler):
 
 
 def make_server(data: Path, port: int = 8770) -> ThreadingHTTPServer:
-    """HTTP server on 127.0.0.1 (``port=0`` picks a free one)."""
+    """HTTP server on 127.0.0.1; if ``port`` is taken (another world running), a free one."""
     handler = functools.partial(_Handler, data=data)
-    return ThreadingHTTPServer(("127.0.0.1", port), handler)
+    try:
+        return ThreadingHTTPServer(("127.0.0.1", port), handler)
+    except OSError:
+        if port == 0:
+            raise
+        print(f"port {port} is in use (another world still running?): using a free port")
+        return ThreadingHTTPServer(("127.0.0.1", 0), handler)
 
 
 def main() -> int:
@@ -88,7 +94,12 @@ def main() -> int:
     p.add_argument("--seed", type=int, default=3, help="random plant seed")
     p.add_argument("--port", type=int, default=8770)
     p.add_argument("--people", type=int, default=80, help="workers in the hall")
-    p.add_argument("--out", type=Path, default=Path("outputs/world"))
+    p.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="folder to write and serve (default: one folder per plant or replay in outputs/world)",
+    )
     p.add_argument("--no-open", action="store_true", help="do not open a browser")
     p.add_argument("--replay", action="store_true", help="run one emergency and play it in 3D")
     p.add_argument("--keep", action="store_true", help="serve what is already exported")
@@ -96,7 +107,9 @@ def main() -> int:
     p.add_argument("--leak", type=int, default=500, help="replay leak seed")
     p.add_argument("--models", default="tabpfn", choices=("tabpfn", "perfect", "baseline"))
     p.add_argument(
-        "--backend", default="baseline", help="tabpfn models: baseline (offline) or cloud"
+        "--backend",
+        default="auto",
+        help="team models: auto (cloud TabPFN when a token is set), cloud, or baseline (offline)",
     )
     a = p.parse_args()
     f = Factory.default()
@@ -113,6 +126,24 @@ def main() -> int:
         rng = np.random.default_rng(a.seed)
         f = Factory.random(rng, width=120.0, height=80.0, n_machines=10, n_hot=4,
                            exits_per_side=2, sensor_spacing=15.0)  # fmt: skip
+    if a.out is None:  # one folder per run: parallel runs never overwrite each other
+        base = Path("outputs/world")
+        if a.keep:
+            runs = [d for d in base.glob("*") if (d / "scene.json").exists()]
+            runs += [base] if (base / "scene.json").exists() else []
+            a.out = max(runs, key=lambda d: (d / "scene.json").stat().st_mtime) if runs else base
+        elif a.replay:
+            from tabpfn_spatial.core.models import pick_backend
+
+            a.backend = pick_backend(a.backend) if a.models == "tabpfn" else "baseline"
+            tag = a.backend if a.models == "tabpfn" else "sim"
+            a.out = base / f"replay-{a.rung}-leak{a.leak}-{a.models}-{tag}"
+        else:
+            a.out = base / (f.name.replace(" ", "-") if f.name else "plant")
+    elif a.replay and a.models == "tabpfn":
+        from tabpfn_spatial.core.models import pick_backend
+
+        a.backend = pick_backend(a.backend)
     if a.keep:
         print("serving", a.out)
     elif a.replay:
@@ -120,7 +151,10 @@ def main() -> int:
         from tabpfn_spatial.world.replay import make_replay
 
         rung = find_rung(a.rung)
-        print(f"running {rung.label}, leak {a.leak}, models {a.models} (about a minute)...")
+        print(
+            f"running {rung.label}, leak {a.leak}, models {a.models} ({a.backend}); "
+            "a few minutes with the team's models..."
+        )
         print("replay:", write_replay(make_replay(rung, a.leak, a.models, a.backend), a.out))
     else:
         (a.out / "replay.json").unlink(missing_ok=True)
