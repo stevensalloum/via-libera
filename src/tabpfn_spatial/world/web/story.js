@@ -43,6 +43,24 @@ function count(el) {
   requestAnimationFrame(tick);
 }
 
+// ---- media tabs: a tab's video plays from the start when shown -------------------------------
+for (const t of document.querySelectorAll(".tabs")) {
+  const btns = [...t.querySelectorAll("nav button")], panels = [...t.querySelectorAll(".panel")];
+  btns.forEach((b, i) => b.addEventListener("click", () => {
+    btns.forEach((x, j) => x.classList.toggle("on", i === j));
+    panels.forEach((p, j) => {
+      p.hidden = i !== j;
+      for (const v of p.querySelectorAll("video")) { if (i === j) { v.currentTime = 0; v.play(); } else v.pause(); }
+    });
+  }));
+}
+// videos outside tabs (system loop) play while their scene is on screen
+const vids = new IntersectionObserver((es) => es.forEach((e) => {
+  if (e.target.closest(".panel[hidden]")) return;
+  if (e.isIntersecting) e.target.play().catch(() => {}); else e.target.pause();
+}), { threshold: 0.4 });
+document.querySelectorAll("video").forEach((v) => vids.observe(v));
+
 // ---- tooltip ----------------------------------------------------------------------------
 const tip = document.createElement("div");
 tip.className = "tip";

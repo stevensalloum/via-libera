@@ -62,6 +62,8 @@ class _Handler(SimpleHTTPRequestHandler):
             return str(self.data / path.split("?")[0][len("/data/") :])
         if path.split("?")[0].startswith("/figures/"):  # the study figures, for the story page
             return str(FIGURES / path.split("?")[0][len("/figures/") :])
+        if path.split("?")[0].startswith("/media/"):  # the videos of the story page
+            return str(DEMO / "media" / path.split("?")[0][len("/media/") :])
         return super().translate_path(path)
 
     def do_POST(self) -> None:

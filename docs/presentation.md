@@ -21,8 +21,8 @@ the face-cam frame (bottom right is kept free on every scene), **H** hides the n
 |---|---|---|
 | (0) | generated clip, 10 s (edited in) | — |
 | 1 · Via Libera | the name: Italian "the way is clear" | logo |
-| 2 · Vision | smart factories first; then robots and drones for logistics and maintenance | live 3D factory behind the text |
-| 3 · System | detectors → source → hazard → routing → people and robots, every 15 s | flow chart (hover a block) |
+| 2 · Vision | smart factories first; then robots and drones for logistics and maintenance | 3D cloud run behind the text |
+| 3 · System | detectors → source → hazard → routing → people and robots, every 15 s | flow chart + the loop running (2D, cloud models) |
 | 4 · Source (2D) | sensor history in, source map out; TabPFN vs k-NN vs centroid | error over time, release-rate error |
 | 5 · Hazard (2D) | P(toxic) per cell; TabPFN vs forward physics | Brier across mixing, operating points |
 | 6 · Routing (2D) | CCRP on length + w·P(harm); TabPFN gives P(harm), not the search | seconds in gas: baseline / TabPFN / perfect vs nearest exit |
@@ -31,6 +31,12 @@ the face-cam frame (bottom right is kept free on every scene), **H** hides the n
 | 9 · Demo | one worker, three plans | live map (Play); "Person view in 3D" for the first-person shot |
 | 10 · Results | −83 % time in gas, −90 % unseen, −64 % exposed, no slower | counters |
 | 11 · Future | models, guidance, real sites, robots and drones, interfaces | cards |
+
+Scenes 4–7 have tabs (click them while recording): **Accuracy** (the comparison charts) and
+the visuals: source → *What the detectors see*, *Detector masts*; hazard → *Forecast maps*
+(video), *Sensor history*; routing → *One worker* (red → orange → green, video), *Crowd*;
+3D → *Today vs Via Libera* (two videos side by side), *Height of the gas*. The videos are in
+`demo/media/` (re-rendered from the saved runs, no tokens).
 
 ## Recordings (screen recording: Cmd+Shift+5 on a Mac, "Record selected portion")
 
