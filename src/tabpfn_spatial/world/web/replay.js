@@ -227,6 +227,11 @@ export class Replay {
     this.applyUpdate(this.t);
     this.applyPeople(this.t);
     this.animatePuff(dt);
+    const wall = performance.now() / 1000;
+    if (this.rep.agvs) this.parts.agvs.show(this.rep.agvs, this.t, wall);
+    const alarm = this.rep.t_alarm !== null && this.t >= this.rep.t_alarm;
+    this.parts.machines.userData.stopped = alarm;  // robot arms and conveyors e-stop too
+    this.parts.zone.show(this.rep.height_zone, alarm ? this.t : null);
     const pulse = 1 + 0.15 * Math.sin(performance.now() / 180);
     for (const r of this.rings) if (r.visible) r.material.opacity = 0.55 + 0.35 * Math.sin(performance.now() / 250);
     return pulse;

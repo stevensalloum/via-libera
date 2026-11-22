@@ -79,6 +79,12 @@ def main() -> int:
     """CLI: ``uv run world [--plant default|random] [--seed 3] [--port 8770] [--no-open]``."""
     p = argparse.ArgumentParser(description="Serve the 3D factory world.")
     p.add_argument("--plant", choices=("default", "random"), default="default")
+    p.add_argument(
+        "--layout",
+        default=None,
+        help="shaped plant: a template (L-plant, U-plant, T-plant, campus) or a kind "
+        "(L, U, T, campus) drawn with --seed (unseen shapes)",
+    )
     p.add_argument("--seed", type=int, default=3, help="random plant seed")
     p.add_argument("--port", type=int, default=8770)
     p.add_argument("--people", type=int, default=80, help="workers in the hall")
@@ -86,7 +92,7 @@ def main() -> int:
     p.add_argument("--no-open", action="store_true", help="do not open a browser")
     p.add_argument("--replay", action="store_true", help="run one emergency and play it in 3D")
     p.add_argument("--keep", action="store_true", help="serve what is already exported")
-    p.add_argument("--rung", default="B", help="replay scenario A-E (see evac-crowd)")
+    p.add_argument("--rung", default="B", help="replay scenario A-E, or shaped L, U, T, K")
     p.add_argument("--leak", type=int, default=500, help="replay leak seed")
     p.add_argument("--models", default="tabpfn", choices=("tabpfn", "perfect", "baseline"))
     p.add_argument(
@@ -94,17 +100,26 @@ def main() -> int:
     )
     a = p.parse_args()
     f = Factory.default()
-    if a.plant == "random":
+    if a.layout:
+        from tabpfn_spatial.sim.layouts import KINDS, TEMPLATES, shaped, template
+
+        if a.layout in TEMPLATES:
+            f = template(a.layout)
+        elif a.layout in KINDS:
+            f = shaped(np.random.default_rng(a.seed), a.layout, name=f"{a.layout} seed {a.seed}")
+        else:
+            p.error(f"--layout must be one of {list(TEMPLATES) + list(KINDS)}")
+    elif a.plant == "random":
         rng = np.random.default_rng(a.seed)
         f = Factory.random(rng, width=120.0, height=80.0, n_machines=10, n_hot=4,
                            exits_per_side=2, sensor_spacing=15.0)  # fmt: skip
     if a.keep:
         print("serving", a.out)
     elif a.replay:
-        from tabpfn_spatial.evac.crowd_study import RUNGS
+        from tabpfn_spatial.evac.crowd_study import find_rung
         from tabpfn_spatial.world.replay import make_replay
 
-        rung = next(r for r in RUNGS if r.name == a.rung)
+        rung = find_rung(a.rung)
         print(f"running {rung.label}, leak {a.leak}, models {a.models} (about a minute)...")
         print("replay:", write_replay(make_replay(rung, a.leak, a.models, a.backend), a.out))
     else:

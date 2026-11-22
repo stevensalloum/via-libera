@@ -53,9 +53,14 @@ class Rung:
     door_m: float = 1.0
     t_max: float = 400.0
     update_s: float = 15.0
+    layout: str | None = None  # a sim.layouts template (shaped plant) instead of a rectangle
 
     def plant(self) -> Factory:
         """The rung's factory (fixed per rung; leaks and crowds vary with the seed)."""
+        if self.layout is not None:
+            from tabpfn_spatial.sim.layouts import template
+
+            return template(self.layout)
         if self.width is None:
             return Factory.default()
         return Factory.random(
@@ -73,6 +78,24 @@ RUNGS = (
     Rung("E", "200x120 m, 1200 people, 8 exits", 1200, 200.0, 120.0, 16, 6, 2, 15.0, 11,
          t_max=700.0, update_s=20.0),
 )  # fmt: skip
+
+# Shaped plants with corridors, rooms and AGVs (sim.layouts templates). Kept apart from
+# RUNGS so the existing crowd studies are unchanged.
+SHAPED_RUNGS = (
+    Rung("L", "L-shaped plant 90x70 m, 300 people, methane", 300, layout="L-plant"),
+    Rung("U", "U-shaped plant 100x70 m, 300 people, propane", 300, layout="U-plant"),
+    Rung("T", "T-shaped plant 90x80 m, 300 people, hydrogen", 300, layout="T-plant"),
+    Rung("K", "campus: two halls + corridor + offices 120x70 m, 400 people", 400,
+         layout="campus", t_max=500.0),
+)  # fmt: skip
+
+
+def find_rung(name: str) -> Rung:
+    """A rung of ``RUNGS`` or ``SHAPED_RUNGS`` by name."""
+    for r in RUNGS + SHAPED_RUNGS:
+        if r.name == name:
+            return r
+    raise ValueError(f"unknown rung {name!r}: {[r.name for r in RUNGS + SHAPED_RUNGS]}")
 
 
 _FITTED: dict = {}  # (rung, backend) -> fitted TabPFN models, one fit per worker process

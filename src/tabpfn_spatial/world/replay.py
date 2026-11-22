@@ -18,6 +18,8 @@ from tabpfn_spatial.evac.crowd_plan import PLANNERS
 from tabpfn_spatial.evac.crowd_run import make_models, prepare, run_crowd
 from tabpfn_spatial.evac.crowd_study import Rung
 from tabpfn_spatial.sim import sample_scenarios
+from tabpfn_spatial.sim.gases import height_zone
+from tabpfn_spatial.sim.robots import AGV_PER_LANE, AGV_SPEED, agv_xy, blocked_factory
 from tabpfn_spatial.world.export import scene
 
 GAS_LOG_MIN, GAS_LOG_MAX = -3.0, 1.0  # 0.001 .. 10 (toxic limit 0.1 = -1)
@@ -56,11 +58,16 @@ def make_replay(
     f = rung.plant()
     rng = np.random.default_rng(seed)
     sc = sample_scenarios(f, 1, rng)[0]
-    people = sample_workers(f, rung.people, rng)
+    if not f.agv_lanes:  # rectangular plants: same order as before, same results
+        people = sample_workers(f, rung.people, rng)
     fitted = make_models(f, sc, models, backend) if models == "tabpfn" else None
     prep = prepare(f, sc, models, rung.t_max, rung.update_s, seed, fitted=fitted, backend=backend)
+    # AGVs emergency-stop at the alarm; their cells block people (sim.robots)
+    f_run, stops = blocked_factory(f, prep.t_alarm)
+    if f.agv_lanes:
+        people = sample_workers(f_run, rung.people, rng)
     params = CrowdParams(door_m=rung.door_m)
-    runs = {p: run_crowd(f, prep, people, p, params, record_every=1) for p in PLANNERS}
+    runs = {p: run_crowd(f_run, prep, people, p, params, record_every=1) for p in PLANNERS}
     ends = [r.metrics["out_all_s"] for r in runs.values() if np.isfinite(r.metrics["out_all_s"])]
     k_end = int(min(rung.t_max, (max(ends) if ends else rung.t_max) + 10))
     gas_t = np.arange(0.0, k_end + 1e-9, gas_every)
@@ -79,8 +86,24 @@ def make_replay(
         last = r.frames[min(k_end, len(r.frames) - 1)]
         planners[p] = {"cells": cells, "state": state, "metrics": r.metrics,
                        "exit": last["exit"].tolist()}  # fmt: skip
+    wind = float(np.linalg.norm(sc.wind))
+    zone = {
+        "truth": {"xy": sc.source.tolist(), **height_zone(f.gas, float(sc.rate), wind)},
+        "updates": [
+            {"t": u["t"], "xy": u["source_top"][0]["xy"],
+             **height_zone(f.gas, u.get("rate_median", 1.0), wind)}
+            for u in updates if u.get("source_top")
+        ],
+    }  # fmt: skip
+    agvs = None
+    if f.agv_lanes:
+        xy = agv_xy(f, np.arange(k_end + 1, dtype=float), prep.t_alarm)
+        agvs = {"speed": AGV_SPEED, "per_lane": AGV_PER_LANE, "t_stop": prep.t_alarm,
+                "xy": np.round(xy, 2).tolist(), "stops": stops}  # fmt: skip
     return {
         "scene": scene(f),
+        "agvs": agvs,
+        "height_zone": zone,
         "rung": f"{rung.name}: {rung.label}",
         "seed": seed,
         "models": models if models != "tabpfn" else f"tabpfn ({backend})",
