@@ -91,10 +91,14 @@ def plant_training_rows(
     times: np.ndarray,
     seed: int,
     diffusivity_range: tuple[float, float] = (0.4, 1.6),
+    near: float = 0.0,
+    near_m: float = 15.0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Generate labelled rows from independent simulated pipe leaks in this plant.
 
-    Times are positive multiples of five seconds. Simulator concentrations are
+    ``near``: fraction of each leak's cells drawn within ``near_m`` (horizontal) of the
+    leak, where the gas is (0 = uniform over the hall, the default). Times are positive
+    multiples of five seconds. Simulator concentrations are
     relative model units. Generate evaluation leaks with a different seed.
     """
     times = validate_times(times)
@@ -128,7 +132,12 @@ def plant_training_rows(
             Ventilation(speed, angle, diffusivity=diffusion),
             float(times[-1]),
         )
-        cells = positions[rng.integers(len(positions), size=cells_per_scenario)]
+        n_near = round(near * cells_per_scenario)
+        close = np.flatnonzero(np.hypot(*(positions[:, :2] - source[:2]).T) <= near_m)
+        picks = rng.integers(len(positions), size=cells_per_scenario - n_near)
+        if n_near and len(close):
+            picks = np.r_[picks, close[rng.integers(len(close), size=n_near)]]
+        cells = positions[picks]
         indices = grid.indices(cells)
         volumes = run.volumes_zyx()
         for t in times:
