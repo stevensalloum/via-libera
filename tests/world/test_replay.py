@@ -21,7 +21,7 @@ def test_replay_has_the_plant_the_timeline_and_every_planner() -> None:
     r = json.loads(json.dumps(_rep()))
     assert r["scene"]["width"] == 60
     assert r["t_alarm"] is not None and r["t_alarm"] <= r["t_end"]
-    assert set(r["planners"]) == set(PLANNERS)
+    assert set(r["planners"]) == {*PLANNERS, "once"}  # once: CCRP planned at the alarm only
     for p in PLANNERS:
         assert set(r["planners"][p]["metrics"]) >= {"harm_s_mean", "exposed_pct", "out_95_s"}
 

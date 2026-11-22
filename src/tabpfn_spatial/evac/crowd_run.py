@@ -153,15 +153,19 @@ def run_crowd(
     record_every: int | None = None,
     detour_weight: float = DETOUR_WEIGHT,
     record_routes: bool = False,
+    once: bool = False,
 ) -> CrowdResult:
     """Evacuate ``positions`` with ``planner``; every planner replans at the same times.
 
     ``record_routes``: keep every active person's planned route after each replan.
+    ``once``: plan only at the first update (the alarm) and never again ("planned once").
     """
     if planner not in PLANNERS:
         raise ValueError(f"planner must be one of {PLANNERS}, not {planner!r}")
     crowd = Crowd(f, positions, params)
     replans = {round(float(t)): d for t, d in zip(prep.replan_times, prep.danger, strict=True)}
+    if once:
+        replans = dict(list(replans.items())[:1])
     out = CrowdResult({})
     for k, t in enumerate(prep.times):
         if round(float(t)) in replans and crowd.active.any():

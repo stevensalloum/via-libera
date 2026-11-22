@@ -177,7 +177,7 @@ if (rep) {
 
 // ----------------------------------------------------------------------- minimap --
 const mini = $("minimap"), mg = mini.getContext("2d");
-const ms = Math.min(240 / scene.width, 160 / scene.height);
+const ms = Math.min((rep ? 400 : 240) / scene.width, (rep ? 270 : 160) / scene.height);
 mini.width = Math.round(scene.width * ms);
 mini.height = Math.round(scene.height * ms);
 const base = document.createElement("canvas");
@@ -207,8 +207,22 @@ mini.onclick = (ev) => {
   const x = ev.offsetX / ms, y = (mini.height - ev.offsetY) / ms;
   nav.flyTo(F.P(x - 6, y - 9, 9), F.P(x, y, 0));
 };
+if (rep) {  // legend over the map
+  const lg = document.createElement("div");
+  lg.id = "minilegend";
+  lg.innerHTML = [["#d628d2", "toxic gas"], ["#ffaa00", "above alarm"], ["#e61e32", "predicted danger"],
+    ["#19e3ff", "leak guess"], ["#ffffff", "leak (after alarm)"], ["#ff7a00", "people"]]
+    .map(([c, t]) => `<span><i style="background:${c}"></i>${t}</span>`).join("");
+  document.body.appendChild(lg);
+  const place = () => { lg.style.bottom = `${mini.height + 18}px`; lg.style.maxWidth = `${mini.width}px`; };
+  place();
+}
+const panel = $("panel");
+panel.querySelector("h1").onclick = () => panel.classList.toggle("collapsed");
+if (rep) panel.classList.add("collapsed");
 function drawMinimap() {
   mg.drawImage(base, 0, 0);
+  if (replay) replay.drawMini(mg, ms, mini.height);
   const [x, y] = F.toFactory(camera.position);
   const d = new THREE.Vector3();
   camera.getWorldDirection(d);

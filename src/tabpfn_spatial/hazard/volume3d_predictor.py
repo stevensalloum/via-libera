@@ -225,8 +225,13 @@ class TabPFNVolumePredictor:
         wind: np.ndarray,
         rate: float,
         times: np.ndarray,
+        keep: np.ndarray | None = None,
     ) -> HazardVolume:
-        """Predict (time, z, y, x) probabilities from explicit 3D source hypotheses."""
+        """Predict (time, z, y, x) probabilities from explicit 3D source hypotheses.
+
+        ``keep``: optional (z, y, x) bool mask of the voxels to predict (e.g. breathing
+        height for the planner); the others stay 0. Features are unchanged.
+        """
         if self.model is None:
             raise ValueError("fit the predictor before predicting")
         trained = self._training_grid
@@ -237,7 +242,8 @@ class TabPFNVolumePredictor:
         sources, weights, wind, times, self.last_retained_mass = _inputs(
             grid, sources, weights, wind, rate, times, self.top_k
         )
-        xyz = grid.centres()[~grid.solid]
+        open_ = ~grid.solid if keep is None else ~grid.solid & np.asarray(keep, bool)
+        xyz = grid.centres()[open_]
         chunk = min(self.batch_size, 64) if self.backend == "baseline" else self.batch_size
         toxic, fire = [], []
         for rows in _feature_batches(grid, sources, wind, rate, times, xyz, chunk):
@@ -247,9 +253,7 @@ class TabPFNVolumePredictor:
         shape = (len(sources), len(times), len(xyz))
         p_toxic = np.zeros((len(times), *grid.solid.shape))
         p_fire = np.zeros_like(p_toxic)
-        p_toxic[:, ~grid.solid] = np.tensordot(
-            weights, np.concatenate(toxic).reshape(shape), axes=1
-        )
-        p_fire[:, ~grid.solid] = np.tensordot(weights, np.concatenate(fire).reshape(shape), axes=1)
+        p_toxic[:, open_] = np.tensordot(weights, np.concatenate(toxic).reshape(shape), axes=1)
+        p_fire[:, open_] = np.tensordot(weights, np.concatenate(fire).reshape(shape), axes=1)
         p_fire *= grid.ignition
         return HazardVolume(times, p_toxic, p_fire)

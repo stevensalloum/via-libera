@@ -69,16 +69,36 @@ def _track(prep, frames: list[dict], k_end: int) -> tuple[str, str]:
 
 
 def make_replay(
-    rung: Rung, seed: int, models: str = "tabpfn", backend: str = "baseline", gas_every: float = 2.0
+    rung: Rung,
+    seed: int,
+    models: str = "tabpfn",
+    backend: str = "baseline",
+    gas_every: float = 2.0,
+    physics: str = "2d",
+    n_train: int = 200,
 ) -> dict:
-    """Run every planner on one leak and pack it. Cost: one closed-loop run per planner."""
+    """Run every planner on one leak and pack it. Cost: one closed-loop run per planner.
+
+    ``physics="3d"``: gas, alarm and the team's models in 3D (``evac.prepare3d``). Besides
+    the planners, ``once`` is CCRP planned at the alarm and never updated (the 2D
+    milestone's orange person).
+    """
     f = rung.plant()
     rng = np.random.default_rng(seed)
     sc = sample_scenarios(f, 1, rng)[0]
     if not f.agv_lanes:  # rectangular plants: same order as before, same results
         people = sample_workers(f, rung.people, rng)
-    fitted = make_models(f, sc, models, backend) if models == "tabpfn" else None
-    prep = prepare(f, sc, models, rung.t_max, rung.update_s, seed, fitted=fitted, backend=backend)
+    leak_z = None
+    if physics == "3d":
+        from tabpfn_spatial.evac.prepare3d import fit_models3d, prepare3d
+
+        fitted = fit_models3d(f, backend, n_train=n_train) if models == "tabpfn" else None
+        prep, run3d = prepare3d(f, sc, models, rung.t_max, rung.update_s, seed, fitted, backend)
+        sc, leak_z = prep.scenario, float(run3d.leak.xyz[2])
+    else:
+        fitted = make_models(f, sc, models, backend) if models == "tabpfn" else None
+        prep = prepare(f, sc, models, rung.t_max, rung.update_s, seed, fitted=fitted,
+                       backend=backend)  # fmt: skip
     # AGVs emergency-stop at the alarm; their cells block people (sim.robots)
     f_run, stops = blocked_factory(f, prep.t_alarm)
     if f.agv_lanes:
@@ -86,6 +106,8 @@ def make_replay(
     params = CrowdParams(door_m=rung.door_m)
     runs = {p: run_crowd(f_run, prep, people, p, params, record_every=1, record_routes=True)
             for p in PLANNERS}  # fmt: skip
+    runs["once"] = run_crowd(f_run, prep, people, "ccrp", params, record_every=1,
+                             record_routes=True, once=True)  # fmt: skip
     ends = [r.metrics["out_all_s"] for r in runs.values() if np.isfinite(r.metrics["out_all_s"])]
     k_end = int(min(rung.t_max, (max(ends) if ends else rung.t_max) + 10))
     gas_t = np.arange(0.0, k_end + 1e-9, gas_every)
@@ -125,7 +147,8 @@ def make_replay(
         "rung": f"{rung.name}: {rung.label}",
         "seed": seed,
         "models": models if models != "tabpfn" else f"tabpfn ({backend})",
-        "leak": {"xy": sc.source.tolist(), "rate": float(sc.rate)},
+        "leak": {"xy": sc.source.tolist(), "rate": float(sc.rate), "z": leak_z},
+        "physics": physics,
         "people": len(people),
         "t_alarm": prep.t_alarm,
         "t_end": float(k_end),
